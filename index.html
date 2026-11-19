@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Open Doors Dispatch Center</title>
+
+<style>
+
+:root{--navy:#14243a;--blue:#2563eb;--bg:#f1f5f9;--white:#fff;--red:#dc2626;--gold:#d97706;--green:#15803d}
+
+*{box-sizing:border-box}
+
+body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:#172033}
+
+header{background:var(--navy);color:white;padding:20px}
+
+header h1{margin:0;font-size:22px}
+
+header p{margin:7px 0 0;color:#cbd5e1;font-size:13px}
+
+nav{display:flex;gap:8px;flex-wrap:wrap;background:#203752;padding:10px}
+
+nav button{background:transparent;color:white;border:1px solid #718096;padding:10px 13px;border-radius:7px}
+
+nav button.active{background:#2563eb;border-color:#2563eb}
+
+main{max-width:1100px;margin:auto;padding:18px}
+
+.notice{background:#fff7ed;border:1px solid #fed7aa;padding:12px;border-radius:8px;font-size:13px;margin-bottom:16px}
+
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+
+.stat,.panel{background:white;border-radius:10px;padding:16px;box-shadow:0 1px 4px #0001;margin-bottom:14px}
+
+.stat strong{display:block;font-size:27px;margin-top:8px}
+
+.stat span{font-size:13px;color:#64748b}
+
+h2{font-size:20px;margin:8px 0 15px}
+
+h3{font-size:16px;margin:0 0 12px}
+
+button,.action{cursor:pointer}
+
+.primary{background:var(--blue);color:white;border:0;border-radius:7px;padding:11px 15px;font-weight:bold}
+
+.secondary{background:#e2e8f0;border:0;border-radius:7px;padding:10px 13px}
+
+.danger{background:#fee2e2;color:#991b1b;border:0;border-radius:7px;padding:8px}
+
+label{display:block;font-size:13px;font-weight:bold;margin:12px 0 5px}
+
+input,select,textarea{width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:7px;font:inherit;background:white}
+
+textarea{min-height:75px}
+
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+
+.ticket{border:1px solid #e2e8f0;border-radius:8px;padding:13px;margin:10px 0;background:#fff}
+
+.ticket-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+
+.ticket p{margin:7px 0;font-size:14px}
+
+.tag{font-size:11px;padding:4px 7px;border-radius:20px;background:#e2e8f0}
+
+.emergency{background:#fee2e2;color:#991b1b}
+
+.urgent{background:#fef3c7;color:#92400e}
+
+.normal{background:#dcfce7;color:#166534}
+
+.muted{color:#64748b;font-size:13px}
+
+.hidden{display:none!important}
+
+footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
+
+@media(min-width:700px){.stats{grid-template-columns:repeat(4,1fr)}}
+
+@media(max-width:480px){.grid{grid-template-columns:1fr}main{padding:12px}}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+
+<h1>🚪 Open Doors Dispatch Center</h1>
+
+<p>Jenna's Independent Learning Academy · HVAC Training Simulator</p>
+
+</header>
+
+<nav>
+
+<button class="active" data-page="dashboard">Dashboard</button>
+
+<button data-page="tickets">Work Orders</button>
+
+<button data-page="new">New Ticket</button>
+
+<button data-page="team">Technicians</button>
+
+</nav>
+
+<main>
+
+<div class="notice">TRAINING ENVIRONMENT — Fictional customers and service calls only. Not a live dispatch service.</div>
+
+<section id="dashboard">
+
+<h2>Dispatch Overview</h2>
+
+<div class="stats">
+
+<div class="stat"><span>Open Work Orders</span><strong id="openCount">0</strong></div>
+
+<div class="stat"><span>Emergency Calls</span><strong id="emergencyCount">0</strong></div>
+
+<div class="stat"><span>Scheduled</span><strong id="scheduledCount">0</strong></div>
+
+<div class="stat"><span>Available Technicians</span><strong id="availableCount">0</strong></div>
+
+</div>
+
+<div class="panel">
+
+<h3>Priority Dispatch Queue</h3>
+
+<div id="queue"></div>
+
+</div>
+
+</section>
+
+<section id="tickets" class="hidden">
+
+<h2>Work Order Board</h2>
+
+<div class="panel">
+
+<label for="filter">Filter by status</label>
+
+<select id="filter">
+
+<option value="all">All work orders</option>
+
+<option>New</option><option>Scheduled</option>
+
+<option>In Progress</option><option>Completed</option>
+
+</select>
+
+<div id="ticketList"></div>
+
+</div>
+
+</section>
+
+<section id="new" class="hidden">
+
+<h2>Create Service Ticket</h2>
+
+<div class="panel">
+
+<form id="ticketForm">
+
+<label>Customer name *</label>
+
+<input id="customer" required placeholder="Example: Morgan Lee">
+
+<label>Service address *</label>
+
+<input id="address" required placeholder="Street, city">
+
+<label>Callback phone</label>
+
+<input id="phone" placeholder="555-0100">
+
+<label>Service issue *</label>
+
+<textarea id="issue" required placeholder="Describe what the customer reports"></textarea>
+
+<div class="grid">
+
+<div><label>Priority</label>
+
+<select id="priority"><option>Routine</option><option>Urgent</option><option>Emergency</option></select></div>
+
+<div><label>Appointment date</label><input id="date" type="date"></div>
+
+</div>
+
+<label>Assigned technician</label>
+
+<select id="assigned"><option value="">Unassigned</option></select>
+
+<button class="primary" type="submit" style="margin-top:16px">Create Work Order</button>
+
+</form>
+
+</div>
+
+</section>
+
+<section id="team" class="hidden">
+
+<h2>Technician Roster</h2>
+
+<div class="panel">
+
+<div id="teamList"></div>
+
+<p class="muted">Training roster only. Availability is manually managed for practice.</p>
+
+</div>
+
+</section>
+
+</main>
+
+<footer>Open Doors Dispatch Center · Training Simulator · Version 1.0</footer>
+
+<script>
+
+const starterTeam=[
+
+{id:1,name:"Ray Okafor",skill:"HVAC Service",available:true},
+
+{id:2,name:"Sofia Grant",skill:"Diagnostics",available:true},
+
+{id:3,name:"Marcus Hill",skill:"Installation",available:true}
+
+];
+
+const starterTickets=[
+
+{id:1001,customer:"Margaret Holloway",address:"12 Oak Lane",phone:"555-0101",issue:"Furnace short-cycling",priority:"Emergency",status:"In Progress",assigned:"Ray Okafor",date:""},
+
+{id:1002,customer:"Deshawn Carter",address:"8 Pine Road",phone:"555-0102",issue:"AC blowing warm air",priority:"Urgent",status:"Scheduled",assigned:"Sofia Grant",date:""},
+
+{id:1003,customer:"Tom Becker",address:"44 River Street",phone:"555-0103",issue:"Blank thermostat display",priority:"Emergency",status:"Scheduled",assigned:"",date:""}
+
+];
+
+let team=JSON.parse(localStorage.getItem("od_team")||"null")||starterTeam;
+
+let tickets=JSON.parse(localStorage.getItem("od_tickets")||"null")||starterTickets;
+
+let nextId=Number(localStorage.getItem("od_next")||1004);
+
+function save(){
+
+localStorage.setItem("od_team",JSON.stringify(team));
+
+localStorage.setItem("od_tickets",JSON.stringify(tickets));
+
+localStorage.setItem("od_next",String(nextId));
+
+}
+
+function showPage(page){
+
+document.querySelectorAll("main section").forEach(s=>s.classList.add("hidden"));
+
+document.getElementById(page).classList.remove("hidden");
+
+document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
+
+render();
+
+}
+
+document.querySelectorAll("nav button").forEach(b=>b.addEventListener("click",()=>showPage(b.dataset.page)));
+
+function priorityClass(p){
+
+return p==="Emergency"?"emergency":p==="Urgent"?"urgent":"normal";
+
+}
+
+function render(){
+
+const active=tickets.filter(t=>t.status!=="Completed");
+
+document.getElementById("openCount").textContent=active.length;
+
+document.getElementById("emergencyCount").textContent=active.filter(t=>t.priority==="Emergency").length;
+
+document.getElementById("scheduledCount").textContent=tickets.filter(t=>t.status==="Scheduled").length;
+
+document.getElementById("availableCount").textContent=team.filter(t=>t.available).length;
+
+const sorted=[...active].sort((a,b)=>["Emergency","Urgent","Routine"].indexOf(a.priority)-["Emergency","Urgent","Routine"].indexOf(b.priority));
+
+document.getElementById("queue").innerHTML=sorted.length?sorted.map(ticketCard).join(""):"<p class='muted'>No active work orders.</p>";
+
+const filter=document.getElementById("filter").value;
+
+const visible=tickets.filter(t=>filter==="all"||t.status===filter);
+
+document.getElementById("ticketList").innerHTML=visible.length?visible.map(ticketCard).join(""):"<p class='muted'>No matching work orders.</p>";
+
+document.getElementById("teamList").innerHTML=team.map(t=>`<div class="ticket"><strong>${escapeHtml(t.name)}</strong><p>${escapeHtml(t.skill)}</p><span class="tag">${t.available?"Available":"Busy"}</span> <button class="secondary" onclick="toggleTech(${t.id})">Change availability</button></div>`).join("");
+
+document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option>${escapeHtml(t.name)}</option>`).join("");
+
+}
+
+function ticketCard(t){
+
+return `<div class="ticket">
+
+<div class="ticket-top"><strong>WO-${t.id}</strong><span class="tag ${priorityClass(t.priority)}">${t.priority}</span></div>
+
+<p><strong>${escapeHtml(t.issue)}</strong></p>
+
+<p>${escapeHtml(t.customer)} · ${escapeHtml(t.address)}</p>
+
+<p class="muted">Technician: ${escapeHtml(t.assigned||"Unassigned")} · ${t.date||"Date not set"}</p>
+
+<label>Update status</label>
+
+<select onchange="changeStatus(${t.id},this.value)">
+
+${["New","Scheduled","In Progress","Completed"].map(s=>`<option ${t.status===s?"selected":""}>${s}</option>`).join("")}
+
+</select>
+
+</div>`;
+
+}
+
+function changeStatus(id,status){
+
+const t=tickets.find(x=>x.id===id);
+
+if(t){t.status=status;save();render();}
+
+}
+
+function toggleTech(id){
+
+const t=team.find(x=>x.id===id);
+
+if(t){t.available=!t.available;save();render();}
+
+}
+
+function escapeHtml(value){
+
+return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+}
+
+document.getElementById("filter").addEventListener("change",render);
+
+document.getElementById("ticketForm").addEventListener("submit",e=>{
+
+e.preventDefault();
+
+tickets.push({
+
+id:nextId++,
+
+customer:document.getElementById("customer").value.trim(),
+
+address:document.getElementById("address").value.trim(),
+
+phone:document.getElementById("phone").value.trim(),
+
+issue:document.getElementById("issue").value.trim(),
+
+priority:document.getElementById("priority").value,
+
+status:"New",
+
+assigned:document.getElementById("assigned").value,
+
+date:document.getElementById("date").value
+
+});
+
+save();
+
+e.target.reset();
+
+alert("Work order created successfully!");
+
+showPage("tickets");
+
+});
+
+render();
+
+</script>
+
+</body>
+
+</html>
