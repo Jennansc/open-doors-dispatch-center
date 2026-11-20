@@ -197,6 +197,8 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 <select id="priority"><option>Routine</option><option>Urgent</option><option>Emergency</option></select></div>
 
 <div><label>Appointment date</label><input id="date" type="date"></div>
+<label for="time">Appointment time</label>
+<input id="time" type="time">
 
 </div>
 
@@ -327,6 +329,11 @@ return `<div class="ticket">
 <p>${escapeHtml(t.customer)} · ${escapeHtml(t.address)}</p>
 
 <p class="muted">Technician: ${escapeHtml(t.assigned||"Unassigned")} · ${t.date||"Date not set"}</p>
+<label>Assigned technician</label>
+<select onchange="changeTechnician(${t.id},this.value)">
+<option value="">Unassigned</option>
+${team.map(person=>`<option value="${escapeHtml(person.name)}" ${t.assigned===person.name?"selected":""}>${escapeHtml(person.name)}</option>`).join("")}
+</select>
 
 <label>Update status</label>
 
@@ -346,6 +353,14 @@ const t=tickets.find(x=>x.id===id);
 
 if(t){t.status=status;save();render();}
 
+}
+function changeTechnician(id,name){
+const t=tickets.find(x=>String(x.id)===String(id));
+if(t){
+t.assigned=name;
+save();
+render();
+}
 }
 
 function toggleTech(id){
@@ -386,7 +401,8 @@ status:"New",
 
 assigned:document.getElementById("assigned").value,
 
-date:document.getElementById("date").value
+date:document.getElementById("date").value,
+time:document.getElementById("time").value
 
 });
 
