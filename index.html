@@ -68,6 +68,14 @@ textarea{min-height:75px}
 
 .ticket p{margin:7px 0;font-size:14px}
 
+.ticket-actions{display:flex;gap:8px;margin-top:10px}
+
+.ticket-dialog{width:min(600px,calc(100% - 24px));max-height:90vh;overflow:auto;border:0;border-radius:10px;padding:20px;box-shadow:0 12px 40px #0004}
+
+.ticket-dialog::backdrop{background:#0f172a99}
+
+.time-picker{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+
 .tag{font-size:11px;padding:4px 7px;border-radius:20px;background:#e2e8f0}
 
 .emergency{background:#fee2e2;color:#991b1b}
@@ -200,6 +208,18 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 </div>
 
+<label>Appointment time (12-hour)</label>
+
+<div class="time-picker">
+
+<select id="createTimeHour" aria-label="Appointment hour"></select>
+
+<select id="createTimeMinute" aria-label="Appointment minute"></select>
+
+<select id="createTimePeriod" aria-label="AM or PM"></select>
+
+</div>
+
 <label>Assigned technician</label>
 
 <select id="assigned"><option value="">Unassigned</option></select>
@@ -228,6 +248,70 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 </main>
 
+<dialog id="ticketDialog" class="ticket-dialog" aria-labelledby="ticketDialogTitle">
+
+<form id="editTicketForm">
+
+<h2 id="ticketDialogTitle">Work Order Details</h2>
+
+<p id="editTicketId" class="muted"></p>
+
+<p id="editTicketStatus" class="muted"></p>
+
+<label for="editCustomer">Customer name *</label>
+
+<input id="editCustomer" required>
+
+<label for="editAddress">Service address *</label>
+
+<input id="editAddress" required>
+
+<label for="editPhone">Callback phone</label>
+
+<input id="editPhone">
+
+<label for="editIssue">Service issue *</label>
+
+<textarea id="editIssue" required></textarea>
+
+<div class="grid">
+
+<div><label for="editPriority">Priority</label>
+
+<select id="editPriority"><option>Routine</option><option>Urgent</option><option>Emergency</option></select></div>
+
+<div><label for="editDate">Appointment date</label><input id="editDate" type="date"></div>
+
+</div>
+
+<label>Appointment time (12-hour)</label>
+
+<div class="time-picker">
+
+<select id="editTimeHour" aria-label="Appointment hour"></select>
+
+<select id="editTimeMinute" aria-label="Appointment minute"></select>
+
+<select id="editTimePeriod" aria-label="AM or PM"></select>
+
+</div>
+
+<label for="editAssigned">Assigned technician</label>
+
+<select id="editAssigned"><option value="">Unassigned</option></select>
+
+<div class="ticket-actions">
+
+<button class="primary" type="submit">Save Changes</button>
+
+<button class="secondary" type="button" onclick="closeTicketDetails()">Cancel</button>
+
+</div>
+
+</form>
+
+</dialog>
+
 <footer>Open Doors Dispatch Center · Training Simulator · Version 1.0</footer>
 
 <script>
@@ -252,19 +336,275 @@ const starterTickets=[
 
 ];
 
-let team=JSON.parse(localStorage.getItem("od_team")||"null")||starterTeam;
+function validTeamMember(member){
 
-let tickets=JSON.parse(localStorage.getItem("od_tickets")||"null")||starterTickets;
+return member&&Number.isSafeInteger(member.id)&&member.id>0&&typeof member.name==="string"&&member.name.trim().length>0&&typeof member.skill==="string"&&member.skill.trim().length>0&&typeof member.available==="boolean";
 
-let nextId=Number(localStorage.getItem("od_next")||1004);
+}
+
+function validTicket(ticket){
+
+return ticket&&Number.isSafeInteger(ticket.id)&&ticket.id>0&&typeof ticket.customer==="string"&&ticket.customer.trim().length>0&&typeof ticket.address==="string"&&ticket.address.trim().length>0&&typeof ticket.phone==="string"&&typeof ticket.issue==="string"&&ticket.issue.trim().length>0&&["Routine","Urgent","Emergency"].includes(ticket.priority)&&["New","Scheduled","In Progress","Completed"].includes(ticket.status)&&typeof ticket.assigned==="string"&&typeof ticket.date==="string"&&(ticket.time===undefined||ticket.time===""||/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(ticket.time));
+
+}
+
+function readStoredArray(key,fallback,validator){
+
+let stored;
+
+try{
+
+const raw=localStorage.getItem(key);
+
+if(raw===null)return fallback.map(item=>({...item}));
+
+stored=JSON.parse(raw);
+
+}catch(error){
+
+console.warn(`Could not read stored data for ${key}; using starter data.`,error);
+
+return fallback.map(item=>({...item}));
+
+}
+
+const validEntries=Array.isArray(stored)&&stored.every(validator);
+
+const uniqueIds=validEntries&&
+
+(key==="od_tickets"?new Set(stored.map(ticket=>ticket.id)).size===stored.length:
+
+key==="od_team"?new Set(stored.map(member=>member.id)).size===stored.length:
+
+true);
+
+if(!validEntries||!uniqueIds){
+
+console.warn(`Invalid stored data for ${key}; using starter data.`);
+
+return fallback.map(item=>({...item}));
+
+}
+
+return stored;
+
+}
+
+function nextSafeId(tickets,storedNext){
+
+const largestTicketId=tickets.reduce((largest,ticket)=>Math.max(largest,ticket.id),1003);
+
+const used=new Set(tickets.map(ticket=>ticket.id));
+
+const candidate=Number.isSafeInteger(storedNext)&&storedNext>=1004&&storedNext>largestTicketId?storedNext:largestTicketId+1;
+
+if(candidate<=Number.MAX_SAFE_INTEGER&&!used.has(candidate)){
+
+return candidate;
+
+}
+
+for(let fallback=1004;fallback<=1004+used.size;fallback++){
+
+if(!used.has(fallback)){
+
+return fallback;
+
+}
+
+}
+
+throw new Error("No safe work-order IDs are available.");
+
+}
+
+function readStoredNextId(){
+
+try{
+
+const raw=localStorage.getItem("od_next");
+
+return raw===null?undefined:Number(raw);
+
+}catch(error){
+
+console.warn("Could not read the stored work-order ID counter; it will be rebuilt.",error);
+
+return undefined;
+
+}
+
+}
+
+function validStoredState(state){
+
+return state&&Array.isArray(state.team)&&state.team.every(validTeamMember)&&new Set(state.team.map(member=>member.id)).size===state.team.length&&Array.isArray(state.tickets)&&state.tickets.every(validTicket)&&new Set(state.tickets.map(ticket=>ticket.id)).size===state.tickets.length;
+
+}
+
+function readStoredState(){
+
+let raw;
+
+try{
+
+raw=localStorage.getItem("od_state");
+
+}catch(error){
+
+console.warn("Could not read saved dispatch center data; using legacy data if available.",error);
+
+}
+
+if(raw!==null&&raw!==undefined){
+
+try{
+
+const state=JSON.parse(raw);
+
+if(validStoredState(state)){
+
+return {team:state.team,tickets:state.tickets,nextId:nextSafeId(state.tickets,state.nextId)};
+
+}
+
+console.warn("Invalid saved dispatch center data; using starter data.");
+
+}catch(error){
+
+console.warn("Could not parse saved dispatch center data; using starter data.",error);
+
+}
+
+}
+
+const team=readStoredArray("od_team",starterTeam,validTeamMember);
+
+const tickets=readStoredArray("od_tickets",starterTickets,validTicket);
+
+return {team,tickets,nextId:nextSafeId(tickets,readStoredNextId())};
+
+}
+
+const storedState=readStoredState();
+
+let team=storedState.team;
+
+let tickets=storedState.tickets;
+
+let nextId=storedState.nextId;
+
+function refreshStoredState(){
+
+try{
+
+const raw=localStorage.getItem("od_state");
+
+if(raw===null)return;
+
+const state=JSON.parse(raw);
+
+if(!validStoredState(state))return;
+
+team=state.team;
+
+tickets=state.tickets;
+
+nextId=nextSafeId(tickets,state.nextId);
+
+}catch(error){
+
+console.warn("Could not refresh dispatch center data from storage.",error);
+
+}
+
+}
+
+window.addEventListener("storage",event=>{
+
+if(event.key==="od_state"||event.key===null){
+
+refreshStoredState();
+
+render();
+
+}
+
+});
 
 function save(){
 
-localStorage.setItem("od_team",JSON.stringify(team));
+const serializedState=JSON.stringify({team,tickets,nextId});
 
-localStorage.setItem("od_tickets",JSON.stringify(tickets));
+try{
 
-localStorage.setItem("od_next",String(nextId));
+localStorage.setItem("od_state",serializedState);
+
+}catch(error){
+
+try{
+
+if(localStorage.getItem("od_state")!==null)throw error;
+
+const legacyKeys=["od_team","od_tickets","od_next"];
+
+const legacyEntries=legacyKeys.map(key=>[key,localStorage.getItem(key)]);
+
+if(!legacyEntries.some(([,value])=>value!==null))throw error;
+
+try{
+
+legacyKeys.forEach(key=>localStorage.removeItem(key));
+
+localStorage.setItem("od_state",serializedState);
+
+}catch(migrationError){
+
+legacyEntries.forEach(([key,value])=>{
+
+if(value!==null){
+
+try{
+
+localStorage.setItem(key,value);
+
+}catch(restoreError){
+
+console.error(`Unable to restore legacy storage for ${key}:`,restoreError);
+
+}
+
+}
+
+});
+
+throw migrationError;
+
+}
+
+}catch(saveError){
+
+console.error("Unable to save dispatch center data:",saveError);
+
+alert("This browser could not save your changes, so the change was not applied. Check your browser storage settings and try again.");
+
+return false;
+
+}
+
+}
+
+try{
+
+["od_team","od_tickets","od_next"].forEach(key=>localStorage.removeItem(key));
+
+}catch(error){
+
+console.warn("Saved dispatch center data, but could not remove old storage entries.",error);
+
+}
+
+return true;
 
 }
 
@@ -314,6 +654,8 @@ document.getElementById("teamList").innerHTML=team.map(t=>`<div class="ticket"><
 
 document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option>${escapeHtml(t.name)}</option>`).join("");
 
+document.getElementById("editAssigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option>${escapeHtml(t.name)}</option>`).join("");
+
 }
 
 function ticketCard(t){
@@ -326,7 +668,9 @@ return `<div class="ticket">
 
 <p>${escapeHtml(t.customer)} · ${escapeHtml(t.address)}</p>
 
-<p class="muted">Technician: ${escapeHtml(t.assigned||"Unassigned")} · ${t.date||"Date not set"}</p>
+<p class="muted">Technician: ${escapeHtml(t.assigned||"Unassigned")} · ${escapeHtml(formatAppointment(t.date,t.time||""))}</p>
+
+<div class="ticket-actions"><button class="secondary" type="button" onclick="openTicketDetails(${t.id})">Open work order</button></div>
 
 <label>Update status</label>
 
@@ -340,19 +684,147 @@ ${["New","Scheduled","In Progress","Completed"].map(s=>`<option ${t.status===s?"
 
 }
 
+function formatAppointment(date,time){
+
+if(!date)return "Date not set";
+
+const [year,month,day]=date.split("-").map(Number);
+
+const parsedDate=new Date(year,month-1,day);
+
+const displayDate=Number.isNaN(parsedDate.getTime())?date:parsedDate.toLocaleDateString();
+
+if(!time)return `${displayDate} · Time not set`;
+
+const [hour,minute]=time.split(":").map(Number);
+
+const displayHour=hour%12||12;
+
+return `${displayDate} · ${displayHour}:${String(minute).padStart(2,"0")} ${hour<12?"AM":"PM"}`;
+
+}
+
+function populateTimePicker(prefix){
+
+const hour=document.getElementById(`${prefix}TimeHour`);
+
+const minute=document.getElementById(`${prefix}TimeMinute`);
+
+const period=document.getElementById(`${prefix}TimePeriod`);
+
+hour.innerHTML='<option value="">Hour</option>'+Array.from({length:12},(_,index)=>`<option value="${index+1}">${index+1}</option>`).join("");
+
+minute.innerHTML='<option value="">Minute</option>'+Array.from({length:60},(_,index)=>`<option value="${String(index).padStart(2,"0")}">${String(index).padStart(2,"0")}</option>`).join("");
+
+period.innerHTML='<option value="">AM/PM</option><option>AM</option><option>PM</option>';
+
+}
+
+function setTimePicker(prefix,time){
+
+const [rawHour,rawMinute]=time?time.split(":").map(Number):[];
+
+document.getElementById(`${prefix}TimeHour`).value=time?String(rawHour%12||12):"";
+
+document.getElementById(`${prefix}TimeMinute`).value=time?String(rawMinute).padStart(2,"0"):"";
+
+document.getElementById(`${prefix}TimePeriod`).value=time?(rawHour<12?"AM":"PM"):"";
+
+}
+
+function getTimePicker(prefix){
+
+const hour=document.getElementById(`${prefix}TimeHour`).value;
+
+const minute=document.getElementById(`${prefix}TimeMinute`).value;
+
+const period=document.getElementById(`${prefix}TimePeriod`).value;
+
+const values=[hour,minute,period];
+
+const anyValue=values.some(Boolean);
+
+const complete=values.every(Boolean);
+
+return {anyValue,complete,time:complete?`${String((Number(hour)%12)+(period==="PM"?12:0)).padStart(2,"0")}:${minute}`:""};
+
+}
+
+function openTicketDetails(id){
+
+refreshStoredState();
+
+const ticket=tickets.find(item=>item.id===id);
+
+if(!ticket)return;
+
+editingTicketId=id;
+
+document.getElementById("editTicketId").textContent=`WO-${ticket.id}`;
+
+document.getElementById("editTicketStatus").textContent=`Status: ${ticket.status}`;
+
+document.getElementById("editCustomer").value=ticket.customer;
+
+document.getElementById("editAddress").value=ticket.address;
+
+document.getElementById("editPhone").value=ticket.phone;
+
+document.getElementById("editIssue").value=ticket.issue;
+
+document.getElementById("editPriority").value=ticket.priority;
+
+document.getElementById("editDate").value=ticket.date;
+
+setTimePicker("edit",ticket.time||"");
+
+document.getElementById("editAssigned").value=ticket.assigned;
+
+document.getElementById("ticketDialog").showModal();
+
+}
+
+function closeTicketDetails(){
+
+document.getElementById("ticketDialog").close();
+
+}
+
 function changeStatus(id,status){
+
+refreshStoredState();
 
 const t=tickets.find(x=>x.id===id);
 
-if(t){t.status=status;save();render();}
+if(t){
+
+const previousStatus=t.status;
+
+t.status=status;
+
+if(!save())t.status=previousStatus;
+
+render();
+
+}
 
 }
 
 function toggleTech(id){
 
+refreshStoredState();
+
 const t=team.find(x=>x.id===id);
 
-if(t){t.available=!t.available;save();render();}
+if(t){
+
+t.available=!t.available;
+
+if(!save())t.available=!t.available;
+
+render();
+
+}
 
 }
 
@@ -362,23 +834,179 @@ return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'
 
 }
 
+let editingTicketId=null;
+
+populateTimePicker("create");
+
+populateTimePicker("edit");
+
 document.getElementById("filter").addEventListener("change",render);
+
+["customer","address","issue"].forEach(id=>{
+
+const field=document.getElementById(id);
+
+field.addEventListener("input",()=>field.setCustomValidity(""));
+
+});
+
+["editCustomer","editAddress","editIssue"].forEach(id=>{
+
+const field=document.getElementById(id);
+
+field.addEventListener("input",()=>field.setCustomValidity(""));
+
+});
+
+["createTimeHour","createTimeMinute","createTimePeriod","editTimeHour","editTimeMinute","editTimePeriod"].forEach(id=>{
+
+const field=document.getElementById(id);
+
+field.addEventListener("change",()=>{
+
+document.getElementById(id.startsWith("create")?"createTimeHour":"editTimeHour").setCustomValidity("");
+
+document.getElementById(id.startsWith("create")?"date":"editDate").setCustomValidity("");
+
+});
+
+});
+
+document.getElementById("date").addEventListener("input",e=>e.target.setCustomValidity(""));
+
+document.getElementById("editDate").addEventListener("input",e=>e.target.setCustomValidity(""));
+
+document.getElementById("editTicketForm").addEventListener("submit",e=>{
+
+e.preventDefault();
+
+refreshStoredState();
+
+const customer=document.getElementById("editCustomer");
+
+const address=document.getElementById("editAddress");
+
+const issue=document.getElementById("editIssue");
+
+const requiredFields=[
+
+{element:customer,label:"Customer name"},
+
+{element:address,label:"Service address"},
+
+{element:issue,label:"Service issue"}
+
+];
+
+for(const field of requiredFields){
+
+field.element.setCustomValidity(field.element.value.trim()?"":`${field.label} is required.`);
+
+}
+
+const selectedTime=getTimePicker("edit");
+
+const date=document.getElementById("editDate");
+
+document.getElementById("editTimeHour").setCustomValidity(selectedTime.anyValue&&!selectedTime.complete?"Choose an hour, minute, and AM/PM.":"");
+
+date.setCustomValidity(selectedTime.complete&&!date.value?"Choose an appointment date to save a time.":"");
+
+if(!e.target.reportValidity())return;
+
+const ticket=tickets.find(item=>item.id===editingTicketId);
+
+if(!ticket)return;
+
+const previous={...ticket};
+
+ticket.customer=customer.value.trim();
+
+ticket.address=address.value.trim();
+
+ticket.phone=document.getElementById("editPhone").value.trim();
+
+ticket.issue=issue.value.trim();
+
+ticket.priority=document.getElementById("editPriority").value;
+
+ticket.date=date.value;
+
+ticket.time=date.value?selectedTime.time:"";
+
+ticket.assigned=document.getElementById("editAssigned").value;
+
+if(!save()){
+
+Object.assign(ticket,previous);
+
+return;
+
+}
+
+closeTicketDetails();
+
+render();
+
+});
 
 document.getElementById("ticketForm").addEventListener("submit",e=>{
 
 e.preventDefault();
 
+refreshStoredState();
+
+const customer=document.getElementById("customer");
+
+const address=document.getElementById("address");
+
+const issue=document.getElementById("issue");
+
+const requiredFields=[
+
+{element:customer,label:"Customer name"},
+
+{element:address,label:"Service address"},
+
+{element:issue,label:"Service issue"}
+
+];
+
+for(const field of requiredFields){
+
+field.element.setCustomValidity(field.element.value.trim()?"":`${field.label} is required.`);
+
+}
+
+const selectedTime=getTimePicker("create");
+
+document.getElementById("createTimeHour").setCustomValidity(selectedTime.anyValue&&!selectedTime.complete?"Choose an hour, minute, and AM/PM.":"");
+
+document.getElementById("date").setCustomValidity(selectedTime.complete&&!document.getElementById("date").value?"Choose an appointment date to save a time.":"");
+
+if(!e.target.reportValidity()){
+
+return;
+
+}
+
+if(selectedTime.complete&&!document.getElementById("date").value)return;
+
+nextId=nextSafeId(tickets,nextId);
+
+const previousNextId=nextId;
+
 tickets.push({
 
-id:nextId++,
+id:nextId,
 
-customer:document.getElementById("customer").value.trim(),
+customer:customer.value.trim(),
 
-address:document.getElementById("address").value.trim(),
+address:address.value.trim(),
 
 phone:document.getElementById("phone").value.trim(),
 
-issue:document.getElementById("issue").value.trim(),
+issue:issue.value.trim(),
 
 priority:document.getElementById("priority").value,
 
@@ -386,11 +1014,23 @@ status:"New",
 
 assigned:document.getElementById("assigned").value,
 
-date:document.getElementById("date").value
+date:document.getElementById("date").value,
+
+time:document.getElementById("date").value?selectedTime.time:""
 
 });
 
-save();
+nextId=nextSafeId(tickets,nextId+1);
+
+if(!save()){
+
+tickets.pop();
+
+nextId=previousNextId;
+
+return;
+
+}
 
 e.target.reset();
 
