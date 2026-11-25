@@ -223,6 +223,8 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 <button id="ticketSubmit" class="primary" type="submit" style="margin-top:16px">Create Work Order</button>
 
+<button id="deleteEditButton" class="danger hidden" type="button" onclick="requestDelete(editingId)" style="margin-top:16px">Delete Work Order</button>
+
 <button id="cancelEdit" class="secondary hidden" type="button" onclick="cancelEdit()" style="margin-top:16px">Cancel Edit</button>
 
 </form>
@@ -454,6 +456,7 @@ document.getElementById("time").value=t.time||"";
 document.getElementById("assigned").value=t.assigned||"";
 document.getElementById("ticketSubmit").textContent="Save Changes";
 document.getElementById("cancelEdit").classList.remove("hidden");
+document.getElementById("deleteEditButton").classList.remove("hidden");
 showPage("new");
 }
 
@@ -484,7 +487,7 @@ const linkedId=reason==="Duplicate work order"?Number(document.getElementById("d
 const extra=reason==="Other"?document.getElementById("otherReason").value.trim(): "";
 if(!reason||(reason==="Other"&&!extra)||(reason==="Duplicate work order"&&!linkedId)){alert("Please provide the required deletion reason and any required duplicate link.");return;}
 auditLog.push({workOrderId:t.id,customer:t.customer,address:t.address,phone:t.phone,issue:t.issue,priority:t.priority,status:t.status,assigned:t.assigned,date:t.date||"",time:t.time||"",reason:reason==="Other"?`Other: ${extra}`:reason,linkedWorkOrderId:linkedId,notes:document.getElementById("deleteNotes").value.trim(),deletedBy:"Dispatcher (training simulator)",deletedAt:new Date().toLocaleString()});
-tickets=tickets.filter(x=>x.id!==deletingId);save();closeDeleteModal();render();alert(`WO-${t.id} deleted from active dispatch. Audit record saved.`);
+tickets=tickets.filter(x=>x.id!==deletingId);if(editingId===t.id)cancelEdit();save();closeDeleteModal();render();alert(`WO-${t.id} deleted from active dispatch. Audit record saved.`);
 });
 
 function cancelEdit(){
@@ -492,6 +495,7 @@ editingId=null;
 document.getElementById("ticketForm").reset();
 document.getElementById("ticketSubmit").textContent="Create Work Order";
 document.getElementById("cancelEdit").classList.add("hidden");
+document.getElementById("deleteEditButton").classList.add("hidden");
 }
 
 function changeStatus(id,status){
