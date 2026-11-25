@@ -486,7 +486,7 @@ time:document.getElementById("time").value
 
 if(editingId!==null){
 const existing=tickets.find(t=>t.id===editingId);
-if(!existing){alert("This work order could not be be found.");cancelEdit();return;}
+if(!existing){alert("This work order could not be found.");cancelEdit();return;}
 Object.assign(existing,details);
 save();
 cancelEdit();
