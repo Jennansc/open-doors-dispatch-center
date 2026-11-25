@@ -79,6 +79,16 @@ textarea{min-height:75px}
 
 .ticket-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
 
+.tech-schedule{border:1px solid #cbd5e1;border-radius:10px;padding:14px;margin:18px 0;background:#f8fafc}
+.tech-schedule-header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.schedule-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.schedule-table{width:100%;min-width:850px;border-collapse:collapse;background:white;font-size:13px}
+.schedule-table th,.schedule-table td{padding:10px;border-bottom:1px solid #e2e8f0;text-align:left;vertical-align:top}
+.schedule-table th{background:#e2e8f0;position:sticky;top:0}
+.schedule-table td .muted{display:block;margin-top:4px}
+.schedule-table .primary{padding:7px 10px;font-size:12px;white-space:nowrap}
+.schedule-empty{padding:14px;background:white;border-radius:8px;color:#64748b}
+
 .ticket p{margin:7px 0;font-size:14px}
 
 .tag{font-size:11px;padding:4px 7px;border-radius:20px;background:#e2e8f0}
@@ -250,6 +260,10 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 <div class="panel">
 
 <div id="teamList"></div>
+<div id="techSchedule" class="tech-schedule hidden" aria-live="polite">
+<div class="tech-schedule-header"><div><h3 id="techScheduleTitle">Technician Schedule</h3><p id="techScheduleSummary" class="muted"></p></div><button type="button" class="secondary" onclick="closeTechnicianSchedule()">Close schedule</button></div>
+<div id="techScheduleContent"></div>
+</div>
 
 <p class="muted">Training roster only. Availability is manually managed for practice.</p>
 
@@ -330,6 +344,7 @@ let tickets=JSON.parse(localStorage.getItem("od_tickets")||"null")||starterTicke
 
 let nextId=Number(localStorage.getItem("od_next")||1004);
 
+let selectedTechId=null;
 let editingId=null;
 let deletingId=null;
 let auditLog=JSON.parse(localStorage.getItem("od_audit")||"[]");
@@ -389,7 +404,8 @@ document.getElementById("ticketList").innerHTML=visible.length?visible.map(ticke
 
 document.getElementById("auditList").innerHTML=auditLog.length?[...auditLog].reverse().map(a=>`<div class="audit-entry"><div class="ticket-top"><strong>WO-${a.workOrderId} · ${escapeHtml(a.customer)}</strong><span class="tag emergency">Deleted</span></div><p><strong>Issue:</strong> ${escapeHtml(a.issue)}</p><p><strong>Reason:</strong> ${escapeHtml(a.reason)}</p>${a.linkedWorkOrderId?`<p><strong>Original retained:</strong> WO-${a.linkedWorkOrderId}</p>`:""}${a.notes?`<p><strong>Notes:</strong> ${escapeHtml(a.notes)}</p>`:""}<p class="muted"><strong>Deleted by:</strong> ${escapeHtml(a.deletedBy)} · <strong>When:</strong> ${escapeHtml(a.deletedAt)}</p></div>`).join(""):"<p class=\"muted\">No deleted work orders recorded.</p>";
 
-document.getElementById("teamList").innerHTML=team.map(t=>{const assigned=tickets.filter(x=>x.assigned===t.name&&x.status!=="Completed").length;const total=tickets.filter(x=>x.assigned===t.name).length;const load=assigned>=4?"Heavy":assigned>=2?"Moderate":"Light";const loadClass=load.toLowerCase()==="light"?"":load.toLowerCase();return `<div class="ticket"><div class="ticket-top"><strong>${escapeHtml(t.name)}</strong><span class="tag ${t.available?"normal":"urgent"}">${t.available?"Available":"Unavailable"}</span></div><p><strong>Specialty:</strong> ${escapeHtml(t.skill)}</p><p><strong>Qualifications:</strong> ${escapeHtml(t.qualifications||"Not specified")}</p><p><strong>Shift:</strong> ${escapeHtml(t.shiftStart||"08:00")}–${escapeHtml(t.shiftEnd||"17:00")}</p><div class="tech-metrics"><div class="tech-metric"><strong>${assigned}</strong>Active jobs</div><div class="tech-metric"><strong>${total}</strong>Total assigned</div><div class="tech-metric"><span class="workload ${loadClass}">${load}</span><div style="margin-top:5px">Workload</div></div></div><button class="secondary" onclick="toggleTech(${t.id})">${t.available?"Mark unavailable":"Mark available"}</button></div>`}).join("");
+document.getElementById("teamList").innerHTML=team.map(t=>{const assigned=tickets.filter(x=>x.assigned===t.name&&x.status!=="Completed").length;const total=tickets.filter(x=>x.assigned===t.name).length;const load=assigned>=4?"Heavy":assigned>=2?"Moderate":"Light";const loadClass=load.toLowerCase()==="light"?"":load.toLowerCase();return `<div class="ticket"><div class="ticket-top"><strong>${escapeHtml(t.name)}</strong><span class="tag ${t.available?"normal":"urgent"}">${t.available?"Available":"Unavailable"}</span></div><p><strong>Specialty:</strong> ${escapeHtml(t.skill)}</p><p><strong>Qualifications:</strong> ${escapeHtml(t.qualifications||"Not specified")}</p><p><strong>Shift:</strong> ${escapeHtml(t.shiftStart||"08:00")}–${escapeHtml(t.shiftEnd||"17:00")}</p><div class="tech-metrics"><div class="tech-metric"><strong>${assigned}</strong>Active jobs</div><div class="tech-metric"><strong>${total}</strong>Total assigned</div><div class="tech-metric"><span class="workload ${loadClass}">${load}</span><div style="margin-top:5px">Workload</div></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="primary" type="button" onclick="openTechnicianSchedule(${t.id})">View Schedule</button><button class="secondary" type="button" onclick="toggleTech(${t.id})">${t.available?"Mark unavailable":"Mark available"}</button></div></div>`}).join("");
+renderTechnicianSchedule();
 
 document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} — ${escapeHtml(t.skill)}</option>`).join("");
 updateAppointmentConflict();
@@ -457,6 +473,28 @@ function formatTimeFromMinutes(value){
 const minutes=((value%1440)+1440)%1440;
 const hours=Math.floor(minutes/60),mins=minutes%60;
 return `${hours%12||12}:${String(mins).padStart(2,"0")} ${hours>=12?"PM":"AM"}`;
+}
+
+function openTechnicianSchedule(id){
+selectedTechId=id;renderTechnicianSchedule();
+const panel=document.getElementById("techSchedule");
+panel.classList.remove("hidden");panel.scrollIntoView({behavior:"smooth",block:"start"});
+}
+function closeTechnicianSchedule(){document.getElementById("techSchedule").classList.add("hidden");selectedTechId=null;}
+function renderTechnicianSchedule(){
+const panel=document.getElementById("techSchedule"),tech=team.find(t=>t.id===selectedTechId);
+if(!tech){panel.classList.add("hidden");return;}
+panel.classList.remove("hidden");
+document.getElementById("techScheduleTitle").textContent=`${tech.name} — Work Order Schedule`;
+const orders=tickets.filter(t=>t.assigned===tech.name).sort((a,b)=>{
+const ak=(a.date||"9999-99-99")+" "+(a.time||"99:99"),bk=(b.date||"9999-99-99")+" "+(b.time||"99:99");
+return ak.localeCompare(bk)||a.id-b.id;
+});
+const active=orders.filter(t=>t.status!=="Completed").length;
+document.getElementById("techScheduleSummary").textContent=`${orders.length} total assigned · ${active} active · ${orders.length-active} completed`;
+const out=document.getElementById("techScheduleContent");
+if(!orders.length){out.innerHTML='<p class="schedule-empty">No work orders are currently assigned to this technician.</p>';return;}
+out.innerHTML=`<div class="schedule-table-wrap"><table class="schedule-table"><thead><tr><th>Date</th><th>Time</th><th>Work order</th><th>Status</th><th>Priority</th><th>Customer / address</th><th>Service issue</th><th>Action</th></tr></thead><tbody>${orders.map(t=>`<tr><td>${escapeHtml(t.date?formatAppointment(t.date,""):"Not scheduled")}</td><td>${escapeHtml(t.time?formatAppointment("",t.time):"Not set")}</td><td><strong>WO-${t.id}</strong></td><td>${escapeHtml(t.status||"New")}</td><td>${escapeHtml(t.priority||"Routine")}</td><td>${escapeHtml(t.customer)}<span class="muted">${escapeHtml(t.address)}</span></td><td>${escapeHtml(t.issue)}</td><td><button type="button" class="primary" onclick="editOrder(${t.id})">Open / Edit</button></td></tr>`).join("")}</tbody></table></div><p class="muted">On a phone, swipe the table horizontally to view all columns. Select Open / Edit to update a work order.</p>`;
 }
 
 function findAppointmentConflict(date,time,excludeId=null,assignedName=""){
