@@ -413,7 +413,7 @@ document.getElementById("teamList").innerHTML=team.map(t=>{const assigned=ticket
 renderTechnicianSchedule();
 
 const currentEditing=tickets.find(t=>t.id===editingId);
-document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>{const disabled=!t.available&&!(currentEditing&&currentEditing.assigned===t.name);return `<option value="${escapeHtml(t.name)}" ${disabled?"disabled":""}>${escapeHtml(t.name)} — ${escapeHtml(t.skill)}${t.available?"":" (Unavailable)"}</option>`;}).join("");
+document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>{return `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} — ${escapeHtml(t.skill)}${t.available?"":" (Unavailable)"}</option>`;}).join("");
 updateAppointmentConflict();
 
 }
@@ -449,7 +449,7 @@ return `<div class="ticket">
 
 <select onchange="changeAssigned(${t.id},this.value)">
 
-${[''].concat(team.map(x=>x.name)).map(name=>{const tech=team.find(x=>x.name===name);const disabled=!!name&&tech&&!tech.available&&t.assigned!==name;return `<option value="${escapeHtml(name)}" ${t.assigned===name?"selected":""} ${disabled?"disabled":""}>${name?escapeHtml(name)+(tech&&!tech.available?" — Unavailable":""):"Unassigned"}</option>`;}).join("")}
+${[''].concat(team.map(x=>x.name)).map(name=>{const tech=team.find(x=>x.name===name);return `<option value="${escapeHtml(name)}" ${t.assigned===name?"selected":""}>${name?escapeHtml(name)+(tech&&!tech.available?" — Unavailable":""):"Unassigned"}</option>`;}).join("")}
 
 </select>
 
