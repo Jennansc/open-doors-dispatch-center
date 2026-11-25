@@ -109,6 +109,9 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 @media(max-width:480px){.grid{grid-template-columns:1fr}main{padding:12px}}
 
+.assignment-error{color:#b91c1c;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px}
+.assignment-warning{color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px}
+#ticketSubmit:disabled{opacity:.55;cursor:not-allowed}
 </style>
 
 </head>
@@ -232,6 +235,8 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 <label>Assigned technician</label>
 
 <select id="assigned"><option value="">Unassigned</option></select>
+
+<p id="assignmentValidation" class="muted hidden" role="alert" aria-live="polite"></p>
 
 <button id="ticketSubmit" class="primary" type="submit" style="margin-top:16px">Create Work Order</button>
 
@@ -407,7 +412,8 @@ document.getElementById("auditList").innerHTML=auditLog.length?[...auditLog].rev
 document.getElementById("teamList").innerHTML=team.map(t=>{const assigned=tickets.filter(x=>x.assigned===t.name&&x.status!=="Completed").length;const total=tickets.filter(x=>x.assigned===t.name).length;const load=assigned>=4?"Heavy":assigned>=2?"Moderate":"Light";const loadClass=load.toLowerCase()==="light"?"":load.toLowerCase();return `<div class="ticket"><div class="ticket-top"><strong>${escapeHtml(t.name)}</strong><span class="tag ${t.available?"normal":"urgent"}">${t.available?"Available":"Unavailable"}</span></div><p><strong>Specialty:</strong> ${escapeHtml(t.skill)}</p><p><strong>Qualifications:</strong> ${escapeHtml(t.qualifications||"Not specified")}</p><p><strong>Shift:</strong> ${escapeHtml(t.shiftStart||"08:00")}–${escapeHtml(t.shiftEnd||"17:00")}</p><div class="tech-metrics"><div class="tech-metric"><strong>${assigned}</strong>Active jobs</div><div class="tech-metric"><strong>${total}</strong>Total assigned</div><div class="tech-metric"><span class="workload ${loadClass}">${load}</span><div style="margin-top:5px">Workload</div></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="primary" type="button" onclick="openTechnicianSchedule(${t.id})">View Schedule</button><button class="secondary" type="button" onclick="toggleTech(${t.id})">${t.available?"Mark unavailable":"Mark available"}</button></div></div>`}).join("");
 renderTechnicianSchedule();
 
-document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} — ${escapeHtml(t.skill)}</option>`).join("");
+const currentEditing=tickets.find(t=>t.id===editingId);
+document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>{const disabled=!t.available&&!(currentEditing&&currentEditing.assigned===t.name);return `<option value="${escapeHtml(t.name)}" ${disabled?"disabled":""}>${escapeHtml(t.name)} — ${escapeHtml(t.skill)}${t.available?"":" (Unavailable)"}</option>`;}).join("");
 updateAppointmentConflict();
 
 }
@@ -443,7 +449,7 @@ return `<div class="ticket">
 
 <select onchange="changeAssigned(${t.id},this.value)">
 
-${[''].concat(team.map(x=>x.name)).map(name=>`<option value="${escapeHtml(name)}" ${t.assigned===name?"selected":""}>${name?escapeHtml(name):"Unassigned"}</option>`).join("")}
+${[''].concat(team.map(x=>x.name)).map(name=>{const tech=team.find(x=>x.name===name);const disabled=!!name&&tech&&!tech.available&&t.assigned!==name;return `<option value="${escapeHtml(name)}" ${t.assigned===name?"selected":""} ${disabled?"disabled":""}>${name?escapeHtml(name)+(tech&&!tech.available?" — Unavailable":""):"Unassigned"}</option>`;}).join("")}
 
 </select>
 
@@ -515,24 +521,75 @@ return overlaps&&(!bothAssigned||assignedName===t.assigned);
 })||null;
 }
 
+function getTechnicianAssignmentValidation(details,excludeId=null,existing=null){
+if(existing&&existing.status==="Completed")return {error:"",warning:""};
+const name=details.assigned||"";
+if(!name)return {error:"",warning:""};
+const tech=team.find(t=>t.name===name);
+if(!tech)return {error:"",warning:""};
+if(!tech.available&&(!existing||existing.assigned!==name)){
+return {error:`${tech.name} is marked unavailable. Choose an available technician or mark this technician available first.`,warning:""};
+}
+if(details.date&&details.time){
+const start=timeToMinutes(details.time);
+const shiftStart=timeToMinutes(tech.shiftStart||"08:00");
+const shiftEnd=timeToMinutes(tech.shiftEnd||"17:00");
+if(start===null)return {error:"Choose a valid appointment time.",warning:""};
+if(start<shiftStart||start+APPOINTMENT_DURATION_MINUTES>shiftEnd){
+return {error:`${tech.name}'s shift is ${formatTimeFromMinutes(shiftStart)}–${formatTimeFromMinutes(shiftEnd)}. A 60-minute appointment must fit within that shift.`,warning:""};
+}
+const end=start+APPOINTMENT_DURATION_MINUTES;
+const conflict=tickets.find(t=>{
+if(t.id===excludeId||t.status==="Completed"||t.assigned!==name||t.date!==details.date||!t.time)return false;
+const otherStart=timeToMinutes(t.time);
+if(otherStart===null)return false;
+return start<otherStart+APPOINTMENT_DURATION_MINUTES&&otherStart<end;
+});
+if(conflict){
+const otherStart=timeToMinutes(conflict.time);
+return {error:`${tech.name} is already scheduled for WO-${conflict.id} (${formatTimeFromMinutes(otherStart)}–${formatTimeFromMinutes(otherStart+APPOINTMENT_DURATION_MINUTES)}). Choose another technician or appointment time.`,warning:""};
+}
+}
+const activeCount=tickets.filter(t=>t.id!==excludeId&&t.status!=="Completed"&&t.assigned===name).length;
+if(activeCount>=3){
+return {error:"",warning:`${tech.name} already has ${activeCount} active jobs. Assigning this order will create a heavy workload. Confirm only if dispatch can accommodate it.`};
+}
+return {error:"",warning:""};
+}
+
 function updateAppointmentConflict(){
 const message=document.getElementById("appointmentConflict");
+const assignmentMessage=document.getElementById("assignmentValidation");
 const submit=document.getElementById("ticketSubmit");
 const editing=editingId===null?null:tickets.find(t=>t.id===editingId);
-const conflict=editing&&editing.status==="Completed"?null:findAppointmentConflict(document.getElementById("date").value,document.getElementById("time").value,editingId,document.getElementById("assigned").value);
+const completed=editing&&editing.status==="Completed";
+const details={date:document.getElementById("date").value,time:document.getElementById("time").value,assigned:document.getElementById("assigned").value};
+const conflict=completed?null:findAppointmentConflict(details.date,details.time,editingId,details.assigned);
 if(conflict){
 const start=timeToMinutes(conflict.time);
 message.textContent=`Unavailable: WO-${conflict.id} overlaps this 60-minute appointment window (${formatTimeFromMinutes(start)}–${formatTimeFromMinutes(start+APPOINTMENT_DURATION_MINUTES)}). Choose another time or verify the technician.`;
-message.classList.remove("hidden");
-submit.disabled=true;
-submit.setAttribute("aria-describedby","appointmentConflict");
+message.className="assignment-error";
 }else{
 message.textContent="";
-message.classList.add("hidden");
-submit.disabled=false;
-submit.removeAttribute("aria-describedby");
+message.className="muted hidden";
 }
-return conflict;
+const assignment=completed?{error:"",warning:""}:getTechnicianAssignmentValidation(details,editingId,editing);
+if(assignment.error){
+assignmentMessage.textContent=assignment.error;
+assignmentMessage.className="assignment-error";
+}else if(assignment.warning){
+assignmentMessage.textContent=assignment.warning;
+assignmentMessage.className="assignment-warning";
+}else{
+assignmentMessage.textContent="";
+assignmentMessage.className="muted hidden";
+}
+const blocked=!!conflict||!!assignment.error;
+submit.disabled=blocked;
+const described=[conflict?"appointmentConflict":"",assignment.error||assignment.warning?"assignmentValidation":""].filter(Boolean);
+if(described.length)submit.setAttribute("aria-describedby",described.join(" "));
+else submit.removeAttribute("aria-describedby");
+return conflict||assignment.error||null;
 }
 
 function editOrder(id){
@@ -610,13 +667,15 @@ if(t){t.available=!t.available;save();render();}
 function changeAssigned(id,name){
 const t=tickets.find(x=>x.id===id);
 if(!t)return;
-if(t.status!=="Completed"&&t.date&&t.time){
+if(t.status!=="Completed"){
+const details={assigned:name,date:t.date||"",time:t.time||""};
+const validation=getTechnicianAssignmentValidation(details,t.id,t);
+if(validation.error){alert(validation.error);render();return;}
+if(name&&t.date&&t.time){
 const conflict=findAppointmentConflict(t.date,t.time,t.id,name);
-if(conflict){
-alert(`Technician scheduling conflict: WO-${conflict.id} overlaps this appointment window. Please choose another technician or reschedule.`);
-render();
-return;
+if(conflict){alert(`Scheduling conflict: WO-${conflict.id} overlaps this 60-minute appointment window. Choose another technician or reschedule.`);render();return;}
 }
+if(validation.warning&&!confirm(validation.warning+" Continue with assignment?")){render();return;}
 }
 t.assigned=name;save();render();
 }
@@ -630,6 +689,7 @@ return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'
 document.getElementById("filter").addEventListener("change",render);
 document.getElementById("date").addEventListener("input",updateAppointmentConflict);
 document.getElementById("time").addEventListener("input",updateAppointmentConflict);
+document.getElementById("assigned").addEventListener("change",updateAppointmentConflict);
 
 document.getElementById("technicianForm").addEventListener("submit",e=>{
 
@@ -673,6 +733,9 @@ time:document.getElementById("time").value
 
 const editing=tickets.find(t=>t.id===editingId);
 if(!(editing&&editing.status==="Completed")){
+const assignment=getTechnicianAssignmentValidation(details,editingId,editing);
+if(assignment.error){alert(assignment.error);updateAppointmentConflict();return;}
+if(assignment.warning&&!confirm(assignment.warning+" Continue with assignment?"))return;
 const conflict=findAppointmentConflict(details.date,details.time,editingId,details.assigned);
 if(conflict){alert(`Appointment conflict: WO-${conflict.id} overlaps this 60-minute appointment window. Please choose another slot or verify the technician.`);updateAppointmentConflict();return;}
 }
