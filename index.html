@@ -63,6 +63,12 @@ textarea{min-height:75px}
 .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 
 .ticket{border:1px solid #e2e8f0;border-radius:8px;padding:13px;margin:10px 0;background:#fff}
+.tech-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin:12px 0}
+.tech-metric{background:#f1f5f9;border-radius:7px;padding:9px;font-size:12px}
+.tech-metric strong{display:block;font-size:18px;margin-bottom:3px}
+.workload{display:inline-block;font-size:11px;font-weight:bold;padding:4px 8px;border-radius:20px;background:#dcfce7;color:#166534}
+.workload.moderate{background:#fef3c7;color:#92400e}
+.workload.heavy{background:#fee2e2;color:#991b1b}
 
 .ticket-top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
 
@@ -222,6 +228,30 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 <p class="muted">Training roster only. Availability is manually managed for practice.</p>
 
+<hr style="border:0;border-top:1px solid #e2e8f0;margin:20px 0">
+
+<h3>Add Technician</h3>
+
+<form id="technicianForm">
+
+<label for="techName">Technician name *</label>
+<input id="techName" required maxlength="80" placeholder="Example: Jordan Lee">
+
+<label for="techSpecialty">Primary specialty *</label>
+<input id="techSpecialty" required maxlength="100" placeholder="Example: HVAC Service">
+
+<label for="techQualifications">Qualifications / certifications</label>
+<textarea id="techQualifications" maxlength="500" placeholder="Example: EPA 608 Universal, heat pump diagnostics"></textarea>
+
+<div class="grid">
+<div><label for="techShiftStart">Shift starts</label><input id="techShiftStart" type="time" value="08:00" required></div>
+<div><label for="techShiftEnd">Shift ends</label><input id="techShiftEnd" type="time" value="17:00" required></div>
+</div>
+
+<button class="primary" type="submit" style="margin-top:16px">Add Technician</button>
+
+</form>
+
 </div>
 
 </section>
@@ -234,11 +264,11 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 const starterTeam=[
 
-{id:1,name:"Ray Okafor",skill:"HVAC Service",available:true},
+{id:1,name:"Ray Okafor",skill:"HVAC Service",qualifications:"EPA 608 Universal",shiftStart:"08:00",shiftEnd:"17:00",available:true},
 
-{id:2,name:"Sofia Grant",skill:"Diagnostics",available:true},
+{id:2,name:"Sofia Grant",skill:"Diagnostics",qualifications:"Electrical troubleshooting",shiftStart:"08:00",shiftEnd:"17:00",available:true},
 
-{id:3,name:"Marcus Hill",skill:"Installation",available:true}
+{id:3,name:"Marcus Hill",skill:"Installation",qualifications:"Heat pump installation",shiftStart:"07:00",shiftEnd:"16:00",available:true}
 
 ];
 
@@ -253,6 +283,8 @@ const starterTickets=[
 ];
 
 let team=JSON.parse(localStorage.getItem("od_team")||"null")||starterTeam;
+
+team=team.map((t,i)=>({...t,skill:t.skill||"HVAC Service",qualifications:t.qualifications||"Not specified",shiftStart:t.shiftStart||"08:00",shiftEnd:t.shiftEnd||"17:00",available:typeof t.available==="boolean"?t.available:true,id:t.id||i+1}));
 
 let tickets=JSON.parse(localStorage.getItem("od_tickets")||"null")||starterTickets;
 
@@ -310,9 +342,9 @@ const visible=tickets.filter(t=>filter==="all"||t.status===filter);
 
 document.getElementById("ticketList").innerHTML=visible.length?visible.map(ticketCard).join(""):"<p class='muted'>No matching work orders.</p>";
 
-document.getElementById("teamList").innerHTML=team.map(t=>`<div class="ticket"><strong>${escapeHtml(t.name)}</strong><p>${escapeHtml(t.skill)}</p><span class="tag">${t.available?"Available":"Busy"}</span> <button class="secondary" onclick="toggleTech(${t.id})">Change availability</button></div>`).join("");
+document.getElementById("teamList").innerHTML=team.map(t=>{const assigned=tickets.filter(x=>x.assigned===t.name&&x.status!=="Completed").length;const total=tickets.filter(x=>x.assigned===t.name).length;const load=assigned>=4?"Heavy":assigned>=2?"Moderate":"Light";const loadClass=load.toLowerCase()==="light"?"":load.toLowerCase();return `<div class="ticket"><div class="ticket-top"><strong>${escapeHtml(t.name)}</strong><span class="tag ${t.available?"normal":"urgent"}">${t.available?"Available":"Unavailable"}</span></div><p><strong>Specialty:</strong> ${escapeHtml(t.skill)}</p><p><strong>Qualifications:</strong> ${escapeHtml(t.qualifications||"Not specified")}</p><p><strong>Shift:</strong> ${escapeHtml(t.shiftStart||"08:00")}–${escapeHtml(t.shiftEnd||"17:00")}</p><div class="tech-metrics"><div class="tech-metric"><strong>${assigned}</strong>Active jobs</div><div class="tech-metric"><strong>${total}</strong>Total assigned</div><div class="tech-metric"><span class="workload ${loadClass}">${load}</span><div style="margin-top:5px">Workload</div></div></div><button class="secondary" onclick="toggleTech(${t.id})">${t.available?"Mark unavailable":"Mark available"}</button></div>`}).join("");
 
-document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option>${escapeHtml(t.name)}</option>`).join("");
+document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} — ${escapeHtml(t.skill)}</option>`).join("");
 
 }
 
@@ -326,7 +358,15 @@ return `<div class="ticket">
 
 <p>${escapeHtml(t.customer)} · ${escapeHtml(t.address)}</p>
 
-<p class="muted">Technician: ${escapeHtml(t.assigned||"Unassigned")} · ${t.date||"Date not set"}</p>
+<p class="muted">Appointment: ${escapeHtml(t.date||"Date not set")}</p>
+
+<label>Assigned technician</label>
+
+<select onchange="changeAssigned(${t.id},this.value)">
+
+${[''].concat(team.map(x=>x.name)).map(name=>`<option value="${escapeHtml(name)}" ${t.assigned===name?"selected":""}>${name?escapeHtml(name):"Unassigned"}</option>`).join("")}
+
+</select>
 
 <label>Update status</label>
 
@@ -356,6 +396,14 @@ if(t){t.available=!t.available;save();render();}
 
 }
 
+function changeAssigned(id,name){
+
+const t=tickets.find(x=>x.id===id);
+
+if(t){t.assigned=name;save();render();}
+
+}
+
 function escapeHtml(value){
 
 return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -363,6 +411,31 @@ return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'
 }
 
 document.getElementById("filter").addEventListener("change",render);
+
+document.getElementById("technicianForm").addEventListener("submit",e=>{
+
+e.preventDefault();
+
+const name=document.getElementById("techName").value.trim();
+const skill=document.getElementById("techSpecialty").value.trim();
+const qualifications=document.getElementById("techQualifications").value.trim()||"Not specified";
+const shiftStart=document.getElementById("techShiftStart").value;
+const shiftEnd=document.getElementById("techShiftEnd").value;
+
+if(!name||!skill||!shiftStart||!shiftEnd){alert("Please complete the required technician fields.");return;}
+if(shiftEnd<=shiftStart){alert("Shift end must be later than shift start. Overnight shifts are not supported in this training version.");return;}
+if(team.some(t=>t.name.toLowerCase()===name.toLowerCase())){alert("A technician with this name is already on the roster.");return;}
+
+const id=team.reduce((max,t)=>Math.max(max,Number(t.id)||0),0)+1;
+team.push({id,name,skill,qualifications,shiftStart,shiftEnd,available:true});
+save();
+e.target.reset();
+document.getElementById("techShiftStart").value="08:00";
+document.getElementById("techShiftEnd").value="17:00";
+render();
+alert("Technician added to the training roster.");
+
+});
 
 document.getElementById("ticketForm").addEventListener("submit",e=>{
 
