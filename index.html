@@ -30,6 +30,13 @@ nav button{background:transparent;color:white;border:1px solid #718096;padding:1
 
 nav button.active{background:#2563eb;border-color:#2563eb}
 
+.modal-backdrop{position:fixed;inset:0;background:#0f172a99;display:flex;align-items:center;justify-content:center;padding:16px;z-index:1000}
+.modal{background:white;border-radius:12px;padding:20px;width:min(100%,520px);max-height:90vh;overflow:auto;box-shadow:0 20px 60px #0004}
+.modal h2{margin-top:0}
+.audit-entry{border:1px solid #e2e8f0;border-radius:8px;padding:13px;margin:10px 0;background:#fff}
+.audit-entry p{margin:6px 0;font-size:14px}
+
+
 main{max-width:1100px;margin:auto;padding:18px}
 
 .notice{background:#fff7ed;border:1px solid #fed7aa;padding:12px;border-radius:8px;font-size:13px;margin-bottom:16px}
@@ -115,6 +122,8 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 <button data-page="new">New Ticket</button>
 
 <button data-page="team">Technicians</button>
+
+<button data-page="audit">Audit Trail</button>
 
 </nav>
 
@@ -214,11 +223,21 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 <button id="ticketSubmit" class="primary" type="submit" style="margin-top:16px">Create Work Order</button>
 
+<button id="deleteEditButton" class="danger hidden" type="button" onclick="requestDelete(editingId)" style="margin-top:16px">Delete Work Order</button>
+
 <button id="cancelEdit" class="secondary hidden" type="button" onclick="cancelEdit()" style="margin-top:16px">Cancel Edit</button>
 
 </form>
 
 </div>
+
+</section>
+
+<section id="audit" class="hidden">
+
+<h2>Work Order Audit Trail</h2>
+
+<div class="panel"><p class="muted">Deleted work orders are removed from active dispatch but retained here with the deletion reason and details.</p><div id="auditList"></div></div>
 
 </section>
 
@@ -262,6 +281,21 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 </main>
 
+<div id="deleteModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="deleteTitle">
+<div class="modal">
+<h2 id="deleteTitle">Delete Work Order?</h2>
+<p id="deleteSummary"></p>
+<form id="deleteForm">
+<label for="deleteReason">Reason for deletion *</label>
+<select id="deleteReason" required><option value="">Choose a reason</option><option>Duplicate work order</option><option>Created in error</option><option>Customer cancelled</option><option>Incorrect customer information</option><option>Other</option></select>
+<div id="duplicateLinkWrap" class="hidden"><label for="duplicateOf">Original work order retained *</label><select id="duplicateOf"></select></div>
+<div id="otherReasonWrap" class="hidden"><label for="otherReason">Explain reason *</label><textarea id="otherReason" maxlength="500"></textarea></div>
+<label for="deleteNotes">Additional notes</label><textarea id="deleteNotes" maxlength="1000" placeholder="Optional details for the audit record"></textarea>
+<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button type="button" class="secondary" onclick="closeDeleteModal()">Cancel</button><button type="submit" class="danger">Confirm Delete</button></div>
+</form>
+</div>
+</div>
+
 <footer>Open Doors Dispatch Center · Training Simulator · Version 1.0</footer>
 
 <script>
@@ -295,6 +329,8 @@ let tickets=JSON.parse(localStorage.getItem("od_tickets")||"null")||starterTicke
 let nextId=Number(localStorage.getItem("od_next")||1004);
 
 let editingId=null;
+let deletingId=null;
+let auditLog=JSON.parse(localStorage.getItem("od_audit")||"[]");
 
 function save(){
 
@@ -303,6 +339,7 @@ localStorage.setItem("od_team",JSON.stringify(team));
 localStorage.setItem("od_tickets",JSON.stringify(tickets));
 
 localStorage.setItem("od_next",String(nextId));
+localStorage.setItem("od_audit",JSON.stringify(auditLog));
 
 }
 
@@ -347,6 +384,8 @@ const filter=document.getElementById("filter").value;
 const visible=tickets.filter(t=>filter==="all"||t.status===filter);
 
 document.getElementById("ticketList").innerHTML=visible.length?visible.map(ticketCard).join(""):"<p class='muted'>No matching work orders.</p>";
+
+document.getElementById("auditList").innerHTML=auditLog.length?[...auditLog].reverse().map(a=>`<div class="audit-entry"><div class="ticket-top"><strong>WO-${a.workOrderId} · ${escapeHtml(a.customer)}</strong><span class="tag emergency">Deleted</span></div><p><strong>Issue:</strong> ${escapeHtml(a.issue)}</p><p><strong>Reason:</strong> ${escapeHtml(a.reason)}</p>${a.linkedWorkOrderId?`<p><strong>Original retained:</strong> WO-${a.linkedWorkOrderId}</p>`:""}${a.notes?`<p><strong>Notes:</strong> ${escapeHtml(a.notes)}</p>`:""}<p class="muted"><strong>Deleted by:</strong> ${escapeHtml(a.deletedBy)} · <strong>When:</strong> ${escapeHtml(a.deletedAt)}</p></div>`).join(""):"<p class=\"muted\">No deleted work orders recorded.</p>";
 
 document.getElementById("teamList").innerHTML=team.map(t=>{const assigned=tickets.filter(x=>x.assigned===t.name&&x.status!=="Completed").length;const total=tickets.filter(x=>x.assigned===t.name).length;const load=assigned>=4?"Heavy":assigned>=2?"Moderate":"Light";const loadClass=load.toLowerCase()==="light"?"":load.toLowerCase();return `<div class="ticket"><div class="ticket-top"><strong>${escapeHtml(t.name)}</strong><span class="tag ${t.available?"normal":"urgent"}">${t.available?"Available":"Unavailable"}</span></div><p><strong>Specialty:</strong> ${escapeHtml(t.skill)}</p><p><strong>Qualifications:</strong> ${escapeHtml(t.qualifications||"Not specified")}</p><p><strong>Shift:</strong> ${escapeHtml(t.shiftStart||"08:00")}–${escapeHtml(t.shiftEnd||"17:00")}</p><div class="tech-metrics"><div class="tech-metric"><strong>${assigned}</strong>Active jobs</div><div class="tech-metric"><strong>${total}</strong>Total assigned</div><div class="tech-metric"><span class="workload ${loadClass}">${load}</span><div style="margin-top:5px">Workload</div></div></div><button class="secondary" onclick="toggleTech(${t.id})">${t.available?"Mark unavailable":"Mark available"}</button></div>`}).join("");
 
@@ -397,7 +436,7 @@ ${["New","Scheduled","In Progress","Completed"].map(s=>`<option ${t.status===s?"
 
 </select>
 
-<button class="secondary" type="button" onclick="editOrder(${t.id})" style="margin-top:10px">Edit Work Order</button>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="secondary" type="button" onclick="editOrder(${t.id})">Edit Work Order</button><button class="danger" type="button" onclick="requestDelete(${t.id})">Delete Work Order</button></div>
 
 </div>`;
 
@@ -417,14 +456,46 @@ document.getElementById("time").value=t.time||"";
 document.getElementById("assigned").value=t.assigned||"";
 document.getElementById("ticketSubmit").textContent="Save Changes";
 document.getElementById("cancelEdit").classList.remove("hidden");
+document.getElementById("deleteEditButton").classList.remove("hidden");
 showPage("new");
 }
+
+function requestDelete(id){
+const t=tickets.find(x=>x.id===id);if(!t)return;
+deletingId=id;
+document.getElementById("deleteSummary").textContent=`Are you sure you want to delete WO-${t.id} (${t.customer} — ${t.issue})? This removes it from active dispatch but keeps a deletion record in the audit trail.`;
+const linked=document.getElementById("duplicateOf");
+linked.innerHTML='<option value="">Choose original work order</option>'+tickets.filter(x=>x.id!==id).map(x=>`<option value="${x.id}">WO-${x.id} — ${escapeHtml(x.customer)} — ${escapeHtml(x.issue)}</option>`).join("");
+document.getElementById("deleteReason").value="";document.getElementById("duplicateOf").value="";document.getElementById("otherReason").value="";document.getElementById("deleteNotes").value="";
+document.getElementById("duplicateLinkWrap").classList.add("hidden");document.getElementById("otherReasonWrap").classList.add("hidden");
+document.getElementById("deleteModal").classList.remove("hidden");
+}
+function closeDeleteModal(){deletingId=null;document.getElementById("deleteModal").classList.add("hidden");}
+document.getElementById("deleteReason").addEventListener("change",()=>{
+const reason=document.getElementById("deleteReason").value;
+const duplicate=reason==="Duplicate work order",other=reason==="Other";
+document.getElementById("duplicateLinkWrap").classList.toggle("hidden",!duplicate);
+document.getElementById("otherReasonWrap").classList.toggle("hidden",!other);
+document.getElementById("duplicateOf").required=duplicate;
+document.getElementById("otherReason").required=other;
+});
+document.getElementById("deleteForm").addEventListener("submit",e=>{
+e.preventDefault();if(deletingId===null)return;
+const t=tickets.find(x=>x.id===deletingId);if(!t){closeDeleteModal();return;}
+const reason=document.getElementById("deleteReason").value;
+const linkedId=reason==="Duplicate work order"?Number(document.getElementById("duplicateOf").value)||null:null;
+const extra=reason==="Other"?document.getElementById("otherReason").value.trim(): "";
+if(!reason||(reason==="Other"&&!extra)||(reason==="Duplicate work order"&&!linkedId)){alert("Please provide the required deletion reason and any required duplicate link.");return;}
+auditLog.push({workOrderId:t.id,customer:t.customer,address:t.address,phone:t.phone,issue:t.issue,priority:t.priority,status:t.status,assigned:t.assigned,date:t.date||"",time:t.time||"",reason:reason==="Other"?`Other: ${extra}`:reason,linkedWorkOrderId:linkedId,notes:document.getElementById("deleteNotes").value.trim(),deletedBy:"Dispatcher (training simulator)",deletedAt:new Date().toLocaleString()});
+tickets=tickets.filter(x=>x.id!==deletingId);if(editingId===t.id)cancelEdit();save();closeDeleteModal();render();alert(`WO-${t.id} deleted from active dispatch. Audit record saved.`);
+});
 
 function cancelEdit(){
 editingId=null;
 document.getElementById("ticketForm").reset();
 document.getElementById("ticketSubmit").textContent="Create Work Order";
 document.getElementById("cancelEdit").classList.add("hidden");
+document.getElementById("deleteEditButton").classList.add("hidden");
 }
 
 function changeStatus(id,status){
