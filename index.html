@@ -204,13 +204,17 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 <div><label>Appointment date</label><input id="date" type="date"></div>
 
+<div><label>Appointment time</label><input id="time" type="time"></div>
+
 </div>
 
 <label>Assigned technician</label>
 
 <select id="assigned"><option value="">Unassigned</option></select>
 
-<button class="primary" type="submit" style="margin-top:16px">Create Work Order</button>
+<button id="ticketSubmit" class="primary" type="submit" style="margin-top:16px">Create Work Order</button>
+
+<button id="cancelEdit" class="secondary hidden" type="button" onclick="cancelEdit()" style="margin-top:16px">Cancel Edit</button>
 
 </form>
 
@@ -290,6 +294,8 @@ let tickets=JSON.parse(localStorage.getItem("od_tickets")||"null")||starterTicke
 
 let nextId=Number(localStorage.getItem("od_next")||1004);
 
+let editingId=null;
+
 function save(){
 
 localStorage.setItem("od_team",JSON.stringify(team));
@@ -358,7 +364,7 @@ return `<div class="ticket">
 
 <p>${escapeHtml(t.customer)} · ${escapeHtml(t.address)}</p>
 
-<p class="muted">Appointment: ${escapeHtml(t.date||"Date not set")}</p>
+<p class="muted">Appointment: ${escapeHtml(t.date||"Date not set")}${t.time?` · ${escapeHtml(t.time)}`:""}</p>
 
 <label>Assigned technician</label>
 
@@ -376,8 +382,34 @@ ${["New","Scheduled","In Progress","Completed"].map(s=>`<option ${t.status===s?"
 
 </select>
 
+<button class="secondary" type="button" onclick="editOrder(${t.id})" style="margin-top:10px">Edit Work Order</button>
+
 </div>`;
 
+}
+
+function editOrder(id){
+const t=tickets.find(x=>x.id===id);
+if(!t)return;
+editingId=id;
+document.getElementById("customer").value=t.customer||"";
+document.getElementById("address").value=t.address||"";
+document.getElementById("phone").value=t.phone||"";
+document.getElementById("issue").value=t.issue||"";
+document.getElementById("priority").value=t.priority||"Routine";
+document.getElementById("date").value=t.date||"";
+document.getElementById("time").value=t.time||"";
+document.getElementById("assigned").value=t.assigned||"";
+document.getElementById("ticketSubmit").textContent="Save Changes";
+document.getElementById("cancelEdit").classList.remove("hidden");
+showPage("new");
+}
+
+function cancelEdit(){
+editingId=null;
+document.getElementById("ticketForm").reset();
+document.getElementById("ticketSubmit").textContent="Create Work Order";
+document.getElementById("cancelEdit").classList.add("hidden");
 }
 
 function changeStatus(id,status){
@@ -441,33 +473,30 @@ document.getElementById("ticketForm").addEventListener("submit",e=>{
 
 e.preventDefault();
 
-tickets.push({
-
-id:nextId++,
-
+const details={
 customer:document.getElementById("customer").value.trim(),
-
 address:document.getElementById("address").value.trim(),
-
 phone:document.getElementById("phone").value.trim(),
-
 issue:document.getElementById("issue").value.trim(),
-
 priority:document.getElementById("priority").value,
-
-status:"New",
-
 assigned:document.getElementById("assigned").value,
+date:document.getElementById("date").value,
+time:document.getElementById("time").value
+};
 
-date:document.getElementById("date").value
-
-});
-
+if(editingId!==null){
+const existing=tickets.find(t=>t.id===editingId);
+if(!existing){alert("This work order could not be found.");cancelEdit();return;}
+Object.assign(existing,details);
 save();
-
+cancelEdit();
+alert("Work order updated and saved!");
+}else{
+tickets.push({id:nextId++,status:"New",...details});
+save();
 e.target.reset();
-
-alert("Work order created successfully!");
+alert("Work order created and saved!");
+}
 
 showPage("tickets");
 
