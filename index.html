@@ -448,7 +448,7 @@ ${["New","Scheduled","In Progress","Completed"].map(s=>`<option ${t.status===s?"
 const APPOINTMENT_DURATION_MINUTES=60;
 
 function timeToMinutes(value){
-if(!value||!/^\\d{2}:\\d{2}$/.test(value))return null;
+if(!value||value.length!==5||value[2]!==":")return null;
 const [hours,minutes]=value.split(":").map(Number);
 return hours*60+minutes;
 }
