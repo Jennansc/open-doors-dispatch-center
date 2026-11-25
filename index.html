@@ -213,7 +213,7 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 <div><label>Appointment date</label><input id="date" type="date"></div>
 
-<div><label>Appointment time</label><input id="time" type="time"></div>
+<div><label>Appointment time (60-minute window)</label><input id="time" type="time"></div>
 
 </div>
 
@@ -445,18 +445,46 @@ ${["New","Scheduled","In Progress","Completed"].map(s=>`<option ${t.status===s?"
 
 }
 
-function findAppointmentConflict(date,time,excludeId=null){
-if(!date||!time)return null;
-return tickets.find(t=>t.id!==excludeId&&t.status!=="Completed"&&t.date===date&&t.time===time)||null;
+const APPOINTMENT_DURATION_MINUTES=60;
+
+function timeToMinutes(value){
+if(!value||value.length!==5||value[2]!==":")return null;
+const [hours,minutes]=value.split(":").map(Number);
+return hours*60+minutes;
+}
+
+function formatTimeFromMinutes(value){
+const minutes=((value%1440)+1440)%1440;
+const hours=Math.floor(minutes/60),mins=minutes%60;
+return `${hours%12||12}:${String(mins).padStart(2,"0")} ${hours>=12?"PM":"AM"}`;
+}
+
+function findAppointmentConflict(date,time,excludeId=null,assignedName=""){
+const start=timeToMinutes(time);
+if(!date||start===null)return null;
+const end=start+APPOINTMENT_DURATION_MINUTES;
+return tickets.find(t=>{
+if(t.id===excludeId||t.status==="Completed"||t.date!==date||!t.time)return false;
+const otherStart=timeToMinutes(t.time);
+if(otherStart===null)return false;
+const otherEnd=otherStart+APPOINTMENT_DURATION_MINUTES;
+const overlaps=start<otherEnd&&otherStart<end;
+if(!overlaps)return false;
+// Different assigned technicians may work simultaneously. If either order is unassigned,
+// treat the overlap as a possible conflict until dispatch can verify the technician.
+const bothAssigned=assignedName&&t.assigned;
+return overlaps&&(!bothAssigned||assignedName===t.assigned);
+})||null;
 }
 
 function updateAppointmentConflict(){
 const message=document.getElementById("appointmentConflict");
 const submit=document.getElementById("ticketSubmit");
 const editing=editingId===null?null:tickets.find(t=>t.id===editingId);
-const conflict=editing&&editing.status==="Completed"?null:findAppointmentConflict(document.getElementById("date").value,document.getElementById("time").value,editingId);
+const conflict=editing&&editing.status==="Completed"?null:findAppointmentConflict(document.getElementById("date").value,document.getElementById("time").value,editingId,document.getElementById("assigned").value);
 if(conflict){
-message.textContent=`Unavailable: WO-${conflict.id} already has this appointment date and time. Choose another time.`;
+const start=timeToMinutes(conflict.time);
+message.textContent=`Unavailable: WO-${conflict.id} overlaps this 60-minute appointment window (${formatTimeFromMinutes(start)}–${formatTimeFromMinutes(start+APPOINTMENT_DURATION_MINUTES)}). Choose another time or verify the technician.`;
 message.classList.remove("hidden");
 submit.disabled=true;
 submit.setAttribute("aria-describedby","appointmentConflict");
@@ -542,11 +570,17 @@ if(t){t.available=!t.available;save();render();}
 }
 
 function changeAssigned(id,name){
-
 const t=tickets.find(x=>x.id===id);
-
-if(t){t.assigned=name;save();render();}
-
+if(!t)return;
+if(t.status!=="Completed"&&t.date&&t.time){
+const conflict=findAppointmentConflict(t.date,t.time,t.id,name);
+if(conflict){
+alert(`Technician scheduling conflict: WO-${conflict.id} overlaps this appointment window. Please choose another technician or reschedule.`);
+render();
+return;
+}
+}
+t.assigned=name;save();render();
 }
 
 function escapeHtml(value){
@@ -601,8 +635,8 @@ time:document.getElementById("time").value
 
 const editing=tickets.find(t=>t.id===editingId);
 if(!(editing&&editing.status==="Completed")){
-const conflict=findAppointmentConflict(details.date,details.time,editingId);
-if(conflict){alert(`Appointment conflict: WO-${conflict.id} already has this date and time. Please choose another slot.`);updateAppointmentConflict();return;}
+const conflict=findAppointmentConflict(details.date,details.time,editingId,details.assigned);
+if(conflict){alert(`Appointment conflict: WO-${conflict.id} overlaps this 60-minute appointment window. Please choose another slot or verify the technician.`);updateAppointmentConflict();return;}
 }
 
 if(editingId!==null){
