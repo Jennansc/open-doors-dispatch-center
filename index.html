@@ -217,6 +217,8 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 </div>
 
+<p id="appointmentConflict" class="muted hidden" role="alert" aria-live="polite"></p>
+
 <label>Assigned technician</label>
 
 <select id="assigned"><option value="">Unassigned</option></select>
@@ -390,6 +392,7 @@ document.getElementById("auditList").innerHTML=auditLog.length?[...auditLog].rev
 document.getElementById("teamList").innerHTML=team.map(t=>{const assigned=tickets.filter(x=>x.assigned===t.name&&x.status!=="Completed").length;const total=tickets.filter(x=>x.assigned===t.name).length;const load=assigned>=4?"Heavy":assigned>=2?"Moderate":"Light";const loadClass=load.toLowerCase()==="light"?"":load.toLowerCase();return `<div class="ticket"><div class="ticket-top"><strong>${escapeHtml(t.name)}</strong><span class="tag ${t.available?"normal":"urgent"}">${t.available?"Available":"Unavailable"}</span></div><p><strong>Specialty:</strong> ${escapeHtml(t.skill)}</p><p><strong>Qualifications:</strong> ${escapeHtml(t.qualifications||"Not specified")}</p><p><strong>Shift:</strong> ${escapeHtml(t.shiftStart||"08:00")}–${escapeHtml(t.shiftEnd||"17:00")}</p><div class="tech-metrics"><div class="tech-metric"><strong>${assigned}</strong>Active jobs</div><div class="tech-metric"><strong>${total}</strong>Total assigned</div><div class="tech-metric"><span class="workload ${loadClass}">${load}</span><div style="margin-top:5px">Workload</div></div></div><button class="secondary" onclick="toggleTech(${t.id})">${t.available?"Mark unavailable":"Mark available"}</button></div>`}).join("");
 
 document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} — ${escapeHtml(t.skill)}</option>`).join("");
+updateAppointmentConflict();
 
 }
 
@@ -440,6 +443,30 @@ ${["New","Scheduled","In Progress","Completed"].map(s=>`<option ${t.status===s?"
 
 </div>`;
 
+}
+
+function findAppointmentConflict(date,time,excludeId=null){
+if(!date||!time)return null;
+return tickets.find(t=>t.id!==excludeId&&t.status!=="Completed"&&t.date===date&&t.time===time)||null;
+}
+
+function updateAppointmentConflict(){
+const message=document.getElementById("appointmentConflict");
+const submit=document.getElementById("ticketSubmit");
+const editing=editingId===null?null:tickets.find(t=>t.id===editingId);
+const conflict=editing&&editing.status==="Completed"?null:findAppointmentConflict(document.getElementById("date").value,document.getElementById("time").value,editingId);
+if(conflict){
+message.textContent=`Unavailable: WO-${conflict.id} already has this appointment date and time. Choose another time.`;
+message.classList.remove("hidden");
+submit.disabled=true;
+submit.setAttribute("aria-describedby","appointmentConflict");
+}else{
+message.textContent="";
+message.classList.add("hidden");
+submit.disabled=false;
+submit.removeAttribute("aria-describedby");
+}
+return conflict;
 }
 
 function editOrder(id){
@@ -529,6 +556,8 @@ return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'
 }
 
 document.getElementById("filter").addEventListener("change",render);
+document.getElementById("date").addEventListener("input",updateAppointmentConflict);
+document.getElementById("time").addEventListener("input",updateAppointmentConflict);
 
 document.getElementById("technicianForm").addEventListener("submit",e=>{
 
@@ -569,6 +598,12 @@ assigned:document.getElementById("assigned").value,
 date:document.getElementById("date").value,
 time:document.getElementById("time").value
 };
+
+const editing=tickets.find(t=>t.id===editingId);
+if(!(editing&&editing.status==="Completed")){
+const conflict=findAppointmentConflict(details.date,details.time,editingId);
+if(conflict){alert(`Appointment conflict: WO-${conflict.id} already has this date and time. Please choose another slot.`);updateAppointmentConflict();return;}
+}
 
 if(editingId!==null){
 const existing=tickets.find(t=>t.id===editingId);
