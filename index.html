@@ -232,6 +232,8 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 <p id="appointmentConflict" class="muted hidden" role="alert" aria-live="polite"></p>
 
+<p id="dateValidation" class="muted hidden" role="alert" aria-live="polite"></p>
+
 <label>Assigned technician</label>
 
 <select id="assigned"><option value="">Unassigned</option></select>
@@ -557,13 +559,28 @@ return {error:"",warning:`${tech.name} already has ${activeCount} active jobs. A
 return {error:"",warning:""};
 }
 
+function getLocalDateString(date=new Date()){
+const year=date.getFullYear();
+const month=String(date.getMonth()+1).padStart(2,"0");
+const day=String(date.getDate()).padStart(2,"0");
+return `${year}-${month}-${day}`;
+}
+
+function isPastAppointmentDate(date){
+return !!date&&date<getLocalDateString();
+}
+
 function updateAppointmentConflict(){
+const dateMessage=document.getElementById("dateValidation");
 const message=document.getElementById("appointmentConflict");
 const assignmentMessage=document.getElementById("assignmentValidation");
 const submit=document.getElementById("ticketSubmit");
 const editing=editingId===null?null:tickets.find(t=>t.id===editingId);
 const completed=editing&&editing.status==="Completed";
 const details={date:document.getElementById("date").value,time:document.getElementById("time").value,assigned:document.getElementById("assigned").value};
+const pastDate=isPastAppointmentDate(details.date)&&(!editing||details.date!==(editing.date||""));
+if(pastDate){dateMessage.textContent="Appointment date cannot be in the past. Choose today or a future date.";dateMessage.className="assignment-error";}
+else{dateMessage.textContent="";dateMessage.className="muted hidden";}
 const conflict=completed?null:findAppointmentConflict(details.date,details.time,editingId,details.assigned);
 if(conflict){
 const start=timeToMinutes(conflict.time);
@@ -584,7 +601,7 @@ assignmentMessage.className="assignment-warning";
 assignmentMessage.textContent="";
 assignmentMessage.className="muted hidden";
 }
-const blocked=!!conflict||!!assignment.error;
+const blocked=pastDate||!!conflict||!!assignment.error;
 submit.disabled=blocked;
 const described=[conflict?"appointmentConflict":"",assignment.error||assignment.warning?"assignmentValidation":""].filter(Boolean);
 if(described.length)submit.setAttribute("aria-describedby",described.join(" "));
@@ -687,6 +704,7 @@ return String(value).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'
 }
 
 document.getElementById("filter").addEventListener("change",render);
+document.getElementById("date").min=getLocalDateString();
 document.getElementById("date").addEventListener("input",updateAppointmentConflict);
 document.getElementById("time").addEventListener("input",updateAppointmentConflict);
 document.getElementById("assigned").addEventListener("change",updateAppointmentConflict);
@@ -732,6 +750,8 @@ time:document.getElementById("time").value
 };
 
 const editing=tickets.find(t=>t.id===editingId);
+const pastDate=isPastAppointmentDate(details.date)&&(!editing||details.date!==(editing.date||""));
+if(pastDate){alert("Appointment date cannot be in the past. Choose today or a future date.");updateAppointmentConflict();return;}
 if(!(editing&&editing.status==="Completed")){
 const assignment=getTechnicianAssignmentValidation(details,editingId,editing);
 if(assignment.error){alert(assignment.error);updateAppointmentConflict();return;}
