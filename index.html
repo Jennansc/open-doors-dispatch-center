@@ -354,6 +354,21 @@ document.getElementById("assigned").innerHTML='<option value="">Unassigned</opti
 
 }
 
+function formatAppointment(date,time){
+if(!date&&!time)return "Date not set";
+let dateLabel=date;
+if(date){
+const [year,month,day]=date.split("-").map(Number);
+dateLabel=new Date(year,month-1,day).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+}
+let timeLabel=time;
+if(time){
+const [hours,minutes]=time.split(":").map(Number);
+timeLabel=`${hours%12||12}:${String(minutes).padStart(2,"0")} ${hours>=12?"PM":"AM"}`;
+}
+return [dateLabel,timeLabel].filter(Boolean).join(" · ");
+}
+
 function ticketCard(t){
 
 return `<div class="ticket">
@@ -364,7 +379,7 @@ return `<div class="ticket">
 
 <p>${escapeHtml(t.customer)} · ${escapeHtml(t.address)}</p>
 
-<p class="muted">Appointment: ${escapeHtml(t.date||"Date not set")}${t.time?` · ${escapeHtml(t.time)}`:""}</p>
+<p class="muted">Appointment: ${escapeHtml(formatAppointment(t.date||"",t.time||""))}</p>
 
 <label>Assigned technician</label>
 
