@@ -412,7 +412,8 @@ document.getElementById("auditList").innerHTML=auditLog.length?[...auditLog].rev
 document.getElementById("teamList").innerHTML=team.map(t=>{const assigned=tickets.filter(x=>x.assigned===t.name&&x.status!=="Completed").length;const total=tickets.filter(x=>x.assigned===t.name).length;const load=assigned>=4?"Heavy":assigned>=2?"Moderate":"Light";const loadClass=load.toLowerCase()==="light"?"":load.toLowerCase();return `<div class="ticket"><div class="ticket-top"><strong>${escapeHtml(t.name)}</strong><span class="tag ${t.available?"normal":"urgent"}">${t.available?"Available":"Unavailable"}</span></div><p><strong>Specialty:</strong> ${escapeHtml(t.skill)}</p><p><strong>Qualifications:</strong> ${escapeHtml(t.qualifications||"Not specified")}</p><p><strong>Shift:</strong> ${escapeHtml(t.shiftStart||"08:00")}–${escapeHtml(t.shiftEnd||"17:00")}</p><div class="tech-metrics"><div class="tech-metric"><strong>${assigned}</strong>Active jobs</div><div class="tech-metric"><strong>${total}</strong>Total assigned</div><div class="tech-metric"><span class="workload ${loadClass}">${load}</span><div style="margin-top:5px">Workload</div></div></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px"><button class="primary" type="button" onclick="openTechnicianSchedule(${t.id})">View Schedule</button><button class="secondary" type="button" onclick="toggleTech(${t.id})">${t.available?"Mark unavailable":"Mark available"}</button></div></div>`}).join("");
 renderTechnicianSchedule();
 
-document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>`<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} — ${escapeHtml(t.skill)}</option>`).join("");
+const currentEditing=tickets.find(t=>t.id===editingId);
+document.getElementById("assigned").innerHTML='<option value="">Unassigned</option>'+team.map(t=>{const disabled=!t.available&&!(currentEditing&&currentEditing.assigned===t.name);return `<option value="${escapeHtml(t.name)}" ${disabled?"disabled":""}>${escapeHtml(t.name)} — ${escapeHtml(t.skill)}${t.available?"":" (Unavailable)"}</option>`;}).join("");
 updateAppointmentConflict();
 
 }
@@ -448,7 +449,7 @@ return `<div class="ticket">
 
 <select onchange="changeAssigned(${t.id},this.value)">
 
-${[''].concat(team.map(x=>x.name)).map(name=>`<option value="${escapeHtml(name)}" ${t.assigned===name?"selected":""}>${name?escapeHtml(name):"Unassigned"}</option>`).join("")}
+${[''].concat(team.map(x=>x.name)).map(name=>{const tech=team.find(x=>x.name===name);const disabled=!!name&&tech&&!tech.available&&t.assigned!==name;return `<option value="${escapeHtml(name)}" ${t.assigned===name?"selected":""} ${disabled?"disabled":""}>${name?escapeHtml(name)+(tech&&!tech.available?" — Unavailable":""):"Unassigned"}</option>`;}).join("")}
 
 </select>
 
@@ -670,7 +671,7 @@ if(t.status!=="Completed"){
 const details={assigned:name,date:t.date||"",time:t.time||""};
 const validation=getTechnicianAssignmentValidation(details,t.id,t);
 if(validation.error){alert(validation.error);render();return;}
-if(t.date&&t.time){
+if(name&&t.date&&t.time){
 const conflict=findAppointmentConflict(t.date,t.time,t.id,name);
 if(conflict){alert(`Scheduling conflict: WO-${conflict.id} overlaps this 60-minute appointment window. Choose another technician or reschedule.`);render();return;}
 }
