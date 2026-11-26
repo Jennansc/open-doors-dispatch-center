@@ -18,8 +18,11 @@ Run these files in order in a new Supabase project's SQL Editor:
 4. `supabase/004_work_order_audit.sql`
 5. `supabase/005_membership_role_guard.sql`
 6. `supabase/006_authenticated_api_grants.sql`
+7. `supabase/007_server_side_schedule_and_fee_rules.sql`
 
-The schema provides organizations, role-based membership, technicians, work orders, and append-only work-order history. Roles: `owner`, `admin`, `dispatcher`, `technician`, `viewer`. RLS isolates organization data. Cross-organization technician assignment is blocked by a composite foreign key. Deletion must use `delete_work_order_with_reason` so the reason and deleted snapshot are retained. Role-management policies restrict owner promotion to owners. Explicit authenticated API grants are still guarded by RLS; anonymous table access is revoked.
+The schema provides organizations, role-based membership, technicians, work orders, and append-only work-order history. Roles: `owner`, `admin`, `dispatcher`, `technician`, `viewer`. RLS isolates organization data. Cross-organization technician assignment is blocked by a composite foreign key. Deletion must use `delete_work_order_with_reason` so the reason and deleted snapshot are retained. Role-management policies restrict owner promotion to owners. Explicit authenticated API grants are guarded by RLS; anonymous table access is revoked.
+
+The server-side scheduling trigger validates future appointments using each organization's `tz_name` (default `America/New_York`), assigned technician availability and shift, and 60-minute appointment overlap rules. It computes the $85 after-hours fee when an appointment extends beyond 5:00 PM and preserves the saved fee if the appointment details are unchanged. These rules need to be exercised in a test Supabase project before app integration.
 
 ## Safe setup sequence
 
@@ -28,7 +31,7 @@ The schema provides organizations, role-based membership, technicians, work orde
 3. Enable email authentication and create a test account.
 4. Call the authenticated RPC `create_organization(org_name)` to create the organization and its first owner membership atomically.
 5. Create test technician/work-order records and verify RLS with a second account from another organization.
-6. Build and test a separate frontend adapter; only then plan a staged integration with the current app.
+6. Build and test a separate frontend adapter (`supabase/adapter.js`); only then plan a staged integration with the current app.
 
 The Supabase project URL and publishable/anon key may be used in a browser client **only with RLS enabled and tested**. Never put a `service_role` or secret key in GitHub Pages, source code, or a browser.
 
