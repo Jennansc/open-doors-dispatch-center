@@ -17,13 +17,24 @@ declare
   shift_start_min integer;
   shift_end_min integer;
   conflict_number bigint;
+  assignment_changed boolean := true;
 begin
-  -- Keep the existing saved fee when appointment details have not changed.
-  if tg_op = 'UPDATE'
-     and old.appointment_date is not distinct from new.appointment_date
-     and old.appointment_time is not distinct from new.appointment_time
-     and old.appointment_duration_minutes is not distinct from new.appointment_duration_minutes then
-    new.after_hours_fee := old.after_hours_fee;
+  -- Avoid referencing OLD on INSERT; preserve fee only for unchanged UPDATE appointments.
+  if tg_op = 'UPDATE' then
+    assignment_changed := old.assigned_technician_id is distinct from new.assigned_technician_id;
+    if old.appointment_date is not distinct from new.appointment_date
+       and old.appointment_time is not distinct from new.appointment_time
+       and old.appointment_duration_minutes is not distinct from new.appointment_duration_minutes then
+      new.after_hours_fee := old.after_hours_fee;
+    else
+      if new.appointment_date is null or new.appointment_time is null then
+        new.after_hours_fee := 0;
+      else
+        start_min := extract(epoch from new.appointment_time)::integer / 60;
+        end_min := start_min + new.appointment_duration_minutes;
+        new.after_hours_fee := case when end_min > 17 * 60 then 85 else 0 end;
+      end if;
+    end if;
   else
     if new.appointment_date is null or new.appointment_time is null then
       new.after_hours_fee := 0;
@@ -35,7 +46,7 @@ begin
   end if;
 
   -- Completed work orders are historical records and may retain past appointments.
-  if new.status = 'Completed' or new.appointment_date is null then
+  if new.status = 'Completed' or new.appointment_date is null or new.appointment_time is null then
     return new;
   end if;
 
@@ -63,8 +74,7 @@ begin
     if not found then
       raise exception 'Assigned technician does not belong to this organization';
     end if;
-    if not tech.is_available and
-       (tg_op = 'INSERT' or old.assigned_technician_id is distinct from new.assigned_technician_id) then
+    if not tech.is_available and assignment_changed then
       raise exception 'Assigned technician is marked unavailable';
     end if;
 
