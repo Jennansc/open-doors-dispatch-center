@@ -566,8 +566,16 @@ const day=String(date.getDate()).padStart(2,"0");
 return `${year}-${month}-${day}`;
 }
 
-function isPastAppointmentDate(date){
-return !!date&&date<getLocalDateString();
+function isPastAppointmentDate(date,time){
+if(!date)return false;
+const today=getLocalDateString();
+if(date<today)return true;
+if(date>today||!time)return false;
+const appointmentMinutes=timeToMinutes(time);
+if(appointmentMinutes===null)return false;
+const now=new Date();
+const currentMinutes=now.getHours()*60+now.getMinutes();
+return appointmentMinutes<currentMinutes;
 }
 
 function updateAppointmentConflict(){
@@ -578,8 +586,8 @@ const submit=document.getElementById("ticketSubmit");
 const editing=editingId===null?null:tickets.find(t=>t.id===editingId);
 const completed=editing&&editing.status==="Completed";
 const details={date:document.getElementById("date").value,time:document.getElementById("time").value,assigned:document.getElementById("assigned").value};
-const pastDate=isPastAppointmentDate(details.date)&&(!editing||details.date!==(editing.date||""));
-if(pastDate){dateMessage.textContent="Appointment date cannot be in the past. Choose today or a future date.";dateMessage.className="assignment-error";}
+const pastDate=isPastAppointmentDate(details.date,details.time)&&(!editing||(details.date!==(editing.date||"")||details.time!==(editing.time||"")));
+if(pastDate){dateMessage.textContent="Appointment date and time have already passed. Choose a future appointment date and time.";dateMessage.className="assignment-error";}
 else{dateMessage.textContent="";dateMessage.className="muted hidden";}
 const conflict=completed?null:findAppointmentConflict(details.date,details.time,editingId,details.assigned);
 if(conflict){
@@ -750,8 +758,8 @@ time:document.getElementById("time").value
 };
 
 const editing=tickets.find(t=>t.id===editingId);
-const pastDate=isPastAppointmentDate(details.date)&&(!editing||details.date!==(editing.date||""));
-if(pastDate){alert("Appointment date cannot be in the past. Choose today or a future date.");updateAppointmentConflict();return;}
+const pastDate=isPastAppointmentDate(details.date,details.time)&&(!editing||(details.date!==(editing.date||"")||details.time!==(editing.time||"")));
+if(pastDate){alert("Appointment date and time have already passed. Choose a future appointment date and time.");updateAppointmentConflict();return;}
 if(!(editing&&editing.status==="Completed")){
 const assignment=getTechnicianAssignmentValidation(details,editingId,editing);
 if(assignment.error){alert(assignment.error);updateAppointmentConflict();return;}
