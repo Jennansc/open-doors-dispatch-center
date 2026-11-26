@@ -587,7 +587,7 @@ const submit=document.getElementById("ticketSubmit");
 const editing=editingId===null?null:tickets.find(t=>t.id===editingId);
 const completed=editing&&editing.status==="Completed";
 const details={date:document.getElementById("date").value,time:document.getElementById("time").value,assigned:document.getElementById("assigned").value};
-const pastDate=isPastAppointmentDate(details.date,details.time);
+const pastDate=!completed&&isPastAppointmentDate(details.date,details.time);
 const partialAppointment=hasPartialAppointment(details);
 if(partialAppointment){dateMessage.textContent="Enter both an appointment date and time, or clear both fields to leave this work order unscheduled.";dateMessage.className="assignment-error";}
 else if(pastDate){dateMessage.textContent="Appointment date and time have already passed. Choose a future appointment date and time, or clear both fields to leave this work order unscheduled.";dateMessage.className="assignment-error";}
@@ -763,7 +763,7 @@ time:document.getElementById("time").value
 const editing=tickets.find(t=>t.id===editingId);
 const partialAppointment=hasPartialAppointment(details);
 if(partialAppointment){alert("Enter both an appointment date and time, or clear both fields to leave this work order unscheduled.");updateAppointmentConflict();return;}
-const pastDate=isPastAppointmentDate(details.date,details.time);
+const pastDate=!(editing&&editing.status==="Completed")&&isPastAppointmentDate(details.date,details.time);
 if(pastDate){alert("Appointment date and time have already passed. Choose a future appointment date and time.");updateAppointmentConflict();return;}
 if(!(editing&&editing.status==="Completed")){
 const assignment=getTechnicianAssignmentValidation(details,editingId,editing);
