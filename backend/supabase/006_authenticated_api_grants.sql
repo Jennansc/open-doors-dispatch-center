@@ -8,7 +8,9 @@ grant select, insert, update, delete on public.organization_members to authentic
 grant select, insert, update, delete on public.technicians to authenticated;
 grant select, insert, update, delete on public.work_orders to authenticated;
 
-grant select, insert on public.work_order_audit to authenticated;
+-- Audit writes are performed only by SECURITY DEFINER triggers/RPCs.
+grant select on public.work_order_audit to authenticated;
+drop policy if exists audit_insert_member on public.work_order_audit;
 
 grant usage, select on all sequences in schema public to authenticated;
 
