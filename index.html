@@ -773,7 +773,9 @@ time:document.getElementById("time").value,
 
 };
 
-const editing=tickets.find(t=>t.id===editingId);\nif(editing){const appointmentChanged=(editing.date||"")!==details.date||(editing.time||"")!==details.time;details.afterHoursFee=appointmentChanged?getAfterHoursFee(details.time):(Number(editing.afterHoursFee)||0);}\nelse{details.afterHoursFee=getAfterHoursFee(details.time);}
+const editing=tickets.find(t=>t.id===editingId);
+if(editing){const appointmentChanged=(editing.date||"")!==details.date||(editing.time||"")!==details.time;details.afterHoursFee=appointmentChanged?getAfterHoursFee(details.time):(Number(editing.afterHoursFee)||0);}
+else{details.afterHoursFee=getAfterHoursFee(details.time);}
 const partialAppointment=hasPartialAppointment(details);
 if(partialAppointment){alert("Enter both an appointment date and time, or clear both fields to leave this work order unscheduled.");updateAppointmentConflict();return;}
 const pastDate=!(editing&&editing.status==="Completed")&&isPastAppointmentDate(details.date,details.time);
