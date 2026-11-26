@@ -19,6 +19,14 @@ declare
   conflict_number bigint;
   assignment_changed boolean := true;
 begin
+  -- Stamp authenticated actor fields on the server.
+  if auth.uid() is not null then
+    if tg_op = 'INSERT' then
+      new.created_by := auth.uid();
+    end if;
+    new.updated_by := auth.uid();
+  end if;
+
   -- Avoid referencing OLD on INSERT; preserve fee only for unchanged UPDATE appointments.
   if tg_op = 'UPDATE' then
     assignment_changed := old.assigned_technician_id is distinct from new.assigned_technician_id;
