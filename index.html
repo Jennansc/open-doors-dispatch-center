@@ -233,6 +233,7 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 <p id="appointmentConflict" class="muted hidden" role="alert" aria-live="polite"></p>
 
 <p id="dateValidation" class="muted hidden" role="alert" aria-live="polite"></p>
+<p id="afterHoursFeePreview" class="muted hidden" aria-live="polite"></p>
 
 <label>Assigned technician</label>
 
@@ -446,6 +447,7 @@ return `<div class="ticket">
 <p>${escapeHtml(t.customer)} · ${escapeHtml(t.address)}</p>
 
 <p class="muted">Appointment: ${escapeHtml(formatAppointment(t.date||"",t.time||""))}</p>
+${getAfterHoursFee(t.time)>0?`<p class="assignment-warning"><strong>After-hours response fee:</strong> ${getAfterHoursFee(t.time).toFixed(2)}</p>`:""}
 
 <label>Assigned technician</label>
 
@@ -477,6 +479,12 @@ const [hours,minutes]=value.split(":").map(Number);
 return hours*60+minutes;
 }
 
+function getAfterHoursFee(time){
+const start=timeToMinutes(time);
+// A 60-minute appointment incurs the fee if any part extends past the 5:00 PM close.
+return start!==null&&start+APPOINTMENT_DURATION_MINUTES>17*60?85:0;
+}
+
 function formatTimeFromMinutes(value){
 const minutes=((value%1440)+1440)%1440;
 const hours=Math.floor(minutes/60),mins=minutes%60;
@@ -502,7 +510,7 @@ const active=orders.filter(t=>t.status!=="Completed").length;
 document.getElementById("techScheduleSummary").textContent=`${orders.length} total assigned · ${active} active · ${orders.length-active} completed`;
 const out=document.getElementById("techScheduleContent");
 if(!orders.length){out.innerHTML='<p class="schedule-empty">No work orders are currently assigned to this technician.</p>';return;}
-out.innerHTML=`<div class="schedule-table-wrap"><table class="schedule-table"><thead><tr><th>Date</th><th>Time</th><th>Work order</th><th>Status</th><th>Priority</th><th>Customer / address</th><th>Service issue</th><th>Action</th></tr></thead><tbody>${orders.map(t=>`<tr><td>${escapeHtml(t.date?formatAppointment(t.date,""):"Not scheduled")}</td><td>${escapeHtml(t.time?formatAppointment("",t.time):"Not set")}</td><td><strong>WO-${t.id}</strong></td><td>${escapeHtml(t.status||"New")}</td><td>${escapeHtml(t.priority||"Routine")}</td><td>${escapeHtml(t.customer)}<span class="muted">${escapeHtml(t.address)}</span></td><td>${escapeHtml(t.issue)}</td><td><button type="button" class="primary" onclick="editOrder(${t.id})">Open / Edit</button></td></tr>`).join("")}</tbody></table></div><p class="muted">On a phone, swipe the table horizontally to view all columns. Select Open / Edit to update a work order.</p>`;
+out.innerHTML=`<div class="schedule-table-wrap"><table class="schedule-table"><thead><tr><th>Date</th><th>Time</th><th>Work order</th><th>Status</th><th>Priority</th><th>Customer / address</th><th>Service issue</th><th>After-hours fee</th><th>Action</th></tr></thead><tbody>${orders.map(t=>`<tr><td>${escapeHtml(t.date?formatAppointment(t.date,""):"Not scheduled")}</td><td>${escapeHtml(t.time?formatAppointment("",t.time):"Not set")}</td><td><strong>WO-${t.id}</strong></td><td>${escapeHtml(t.status||"New")}</td><td>${escapeHtml(t.priority||"Routine")}</td><td>${escapeHtml(t.customer)}<span class="muted">${escapeHtml(t.address)}</span></td><td>${escapeHtml(t.issue)}</td><td>${getAfterHoursFee(t.time)>0?"$"+getAfterHoursFee(t.time).toFixed(2):"—"}</td><td><button type="button" class="primary" onclick="editOrder(${t.id})">Open / Edit</button></td></tr>`).join("")}</tbody></table></div><p class="muted">On a phone, swipe the table horizontally to view all columns. Select Open / Edit to update a work order.</p>`;
 }
 
 function findAppointmentConflict(date,time,excludeId=null,assignedName=""){
@@ -587,6 +595,10 @@ const submit=document.getElementById("ticketSubmit");
 const editing=editingId===null?null:tickets.find(t=>t.id===editingId);
 const completed=editing&&editing.status==="Completed";
 const details={date:document.getElementById("date").value,time:document.getElementById("time").value,assigned:document.getElementById("assigned").value};
+const feePreview=document.getElementById("afterHoursFeePreview");
+const fee=getAfterHoursFee(details.time);
+if(fee&&details.date){feePreview.textContent=`This 60-minute appointment extends past 5:00 PM. An ${fee.toFixed(2)} after-hours response fee will be added.`;feePreview.className="assignment-warning";}
+else{feePreview.textContent="";feePreview.className="muted hidden";}
 const pastDate=!completed&&isPastAppointmentDate(details.date,details.time);
 const partialAppointment=hasPartialAppointment(details);
 if(partialAppointment){dateMessage.textContent="Enter both an appointment date and time, or clear both fields to leave this work order unscheduled.";dateMessage.className="assignment-error";}
@@ -757,7 +769,8 @@ issue:document.getElementById("issue").value.trim(),
 priority:document.getElementById("priority").value,
 assigned:document.getElementById("assigned").value,
 date:document.getElementById("date").value,
-time:document.getElementById("time").value
+time:document.getElementById("time").value,
+afterHoursFee:getAfterHoursFee(document.getElementById("time").value)
 };
 
 const editing=tickets.find(t=>t.id===editingId);
