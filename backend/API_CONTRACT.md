@@ -22,7 +22,7 @@ This describes the first client adapter. It is not wired into `index.html` yet.
 | `assigned` (technician name) | `work_orders.assigned_technician_id` (UUID) |
 | `date` | `work_orders.appointment_date` |
 | `time` | `work_orders.appointment_time` |
-| `afterHoursFee` | `work_orders.after_hours_fee` (saved value; do not recalculate on display) |
+| `afterHoursFee` | `work_orders.after_hours_fee` (server-calculated and saved; never client-overwritten or recalculated on display) |
 | technician `name` | `technicians.display_name` |
 | technician `skill` | `technicians.specialty` |
 | technician `available` | `technicians.is_available` |
@@ -30,7 +30,7 @@ This describes the first client adapter. It is not wired into `index.html` yet.
 ## Initial adapter operations
 
 - `loadWorkspace(organizationId)`: load technicians and work orders for the selected organization.
-- `createWorkOrder(input)`: insert with `organization_id`, `created_by`, `updated_by`; audit trigger records creation.
+- `createWorkOrder(input)`: insert with `organization_id`, `created_by`, `updated_by`; audit trigger records creation and the database calculates the fee.
 - `updateWorkOrder(id, patch)`: update with `updated_by`; audit trigger records old/new snapshots and classifies status/assignment changes.
 - `deleteWorkOrder(id, reason)`: call `delete_work_order_with_reason`; never issue a direct client DELETE.
 - `createTechnician(input)`, `updateTechnician(id, patch)`: use organization-scoped rows; only owner/admin/dispatcher can write.
@@ -47,4 +47,4 @@ Before replacing local storage:
 5. Test saved fee preservation, 60-minute conflict checks, technician shift/workload validation, past-time validation, and completed-order history against server data.
 6. Switch storage behind a feature flag; keep the existing local-only mode until remote tests pass.
 
-Server-side validation still needs to be added for scheduling conflicts and technician shift rules before this can be considered production-safe. Current SQL enforces shape, tenancy, roles, and audit history, but not the simulator's full scheduling rules.
+Migration 007 adds database-side validation for future appointment times, technician shift/availability, overlapping active appointment windows, and the $85 after-hours fee rule. It is not yet tested in a live Supabase project. The schema still requires a disposable-project migration run and role/tenant tests before the backend should be connected to the current simulator.
