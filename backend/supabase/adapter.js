@@ -80,7 +80,7 @@ export function createDispatchBackend(supabase) {
     },
 
     async createTechnician(organizationId, input) {
-      const user = await requireUser();
+      await requireUser();
       if (!organizationId) throw new Error("Choose an organization first.");
       return run(
         supabase
@@ -139,7 +139,7 @@ export function createDispatchBackend(supabase) {
         appointment_date: input.appointment_date || null,
         appointment_time: input.appointment_time || null,
         appointment_duration_minutes: input.appointment_duration_minutes ?? 60,
-        after_hours_fee: input.after_hours_fee ?? 0,
+        // The database trigger calculates and preserves the fee server-side.
         dispatch_notes: String(input.dispatch_notes ?? ""),
         created_by: user.id,
         updated_by: user.id,
@@ -162,7 +162,6 @@ export function createDispatchBackend(supabase) {
         "appointment_date",
         "appointment_time",
         "appointment_duration_minutes",
-        "after_hours_fee",
         "dispatch_notes",
         "completed_at",
       ];
