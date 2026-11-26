@@ -447,7 +447,7 @@ return `<div class="ticket">
 <p>${escapeHtml(t.customer)} · ${escapeHtml(t.address)}</p>
 
 <p class="muted">Appointment: ${escapeHtml(formatAppointment(t.date||"",t.time||""))}</p>
-${getAfterHoursFee(t.time)>0?`<p class="assignment-warning"><strong>After-hours response fee:</strong> ${getAfterHoursFee(t.time).toFixed(2)}</p>`:""}
+${getAfterHoursFee(t.time)>0?`<p class="assignment-warning"><strong>After-hours response fee:</strong> $${getAfterHoursFee(t.time).toFixed(2)}</p>`:""}
 
 <label>Assigned technician</label>
 
@@ -597,7 +597,7 @@ const completed=editing&&editing.status==="Completed";
 const details={date:document.getElementById("date").value,time:document.getElementById("time").value,assigned:document.getElementById("assigned").value};
 const feePreview=document.getElementById("afterHoursFeePreview");
 const fee=getAfterHoursFee(details.time);
-if(fee&&details.date){feePreview.textContent=`This 60-minute appointment extends past 5:00 PM. An ${fee.toFixed(2)} after-hours response fee will be added.`;feePreview.className="assignment-warning";}
+if(fee&&details.date){feePreview.textContent=`This 60-minute appointment extends past 5:00 PM. An $${fee.toFixed(2)} after-hours response fee will be added.`;feePreview.className="assignment-warning";}
 else{feePreview.textContent="";feePreview.className="muted hidden";}
 const pastDate=!completed&&isPastAppointmentDate(details.date,details.time);
 const partialAppointment=hasPartialAppointment(details);
