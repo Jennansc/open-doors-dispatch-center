@@ -17,8 +17,9 @@ Run these files in order in a new Supabase project's SQL Editor:
 3. `supabase/003_create_organization_rpc.sql`
 4. `supabase/004_work_order_audit.sql`
 5. `supabase/005_membership_role_guard.sql`
+6. `supabase/006_authenticated_api_grants.sql`
 
-The schema provides organizations, role-based membership, technicians, work orders, and append-only work-order history. Roles: `owner`, `admin`, `dispatcher`, `technician`, `viewer`. RLS isolates organization data. Cross-organization technician assignment is blocked by a composite foreign key. Deletion must use `delete_work_order_with_reason` so the reason and deleted snapshot are retained. Role-management policies restrict owner promotion to owners.
+The schema provides organizations, role-based membership, technicians, work orders, and append-only work-order history. Roles: `owner`, `admin`, `dispatcher`, `technician`, `viewer`. RLS isolates organization data. Cross-organization technician assignment is blocked by a composite foreign key. Deletion must use `delete_work_order_with_reason` so the reason and deleted snapshot are retained. Role-management policies restrict owner promotion to owners. Explicit authenticated API grants are still guarded by RLS; anonymous table access is revoked.
 
 ## Safe setup sequence
 
