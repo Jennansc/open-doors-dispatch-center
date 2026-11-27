@@ -37,6 +37,19 @@ The server-side scheduling trigger validates future appointments using each orga
 
 The Supabase project URL and publishable/anon key may be used in a browser client **only with RLS enabled and tested**. Never put a `service_role` or secret key in GitHub Pages, source code, or a browser.
 
+## Backend smoke test
+
+After applying migrations 001–009 in the Supabase test project, open the static diagnostic page at `backend/supabase/smoke-test.html` (once this branch is deployed). It accepts the browser-safe project URL/key and a test account, lets you create or select an organization, and runs a fictional work-order test:
+
+- normal appointment fee is $0
+- changing to 5:30 PM produces $85
+- updating a different field preserves the same $85 fee
+- moving back to a 4:00 PM appointment clears the current fee
+- the temporary work order is removed through the reasoned delete RPC
+- create/update/delete events are checked in the audit trail
+
+The test retains the organization and audit history; it does not process payments. If cleanup fails, the page reports the work-order number so it can be removed manually through the audited workflow.
+
 ## Safety / non-goals
 
 - Training data only; do not enter real customer data, payment details, or protected information.
