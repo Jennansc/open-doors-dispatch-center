@@ -156,8 +156,15 @@ async function runSmokeTest() {
   if (!orgId) { log("Select or create an organization first.", "fail"); return; }
   const date = el("testDate").value;
   const normalTime = el("normalTime").value || "10:00";
-  if (!date || date <= new Date().toLocaleDateString("en-CA")) {
+  const now = new Date();
+  const today = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0") + "-" + String(now.getDate()).padStart(2,"0");
+  const normalParts = normalTime.split(":").map(Number);
+  const normalMinutes = normalParts.length === 2 ? normalParts[0]*60 + normalParts[1] : null;
+  if (!date || date <= today) {
     log("Choose a future date for the test appointment.", "fail"); return;
+  }
+  if (normalMinutes === null || normalMinutes + 60 > 17*60) {
+    log("Choose a normal-hours test time that ends by 5:00 PM.", "fail"); return;
   }
   let workOrderId = null;
   let workOrderNumber = null;
