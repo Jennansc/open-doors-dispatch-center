@@ -40,6 +40,11 @@ nav button.active{background:#2563eb;border-color:#2563eb}
 main{max-width:1100px;margin:auto;padding:18px}
 
 .notice{background:#fff7ed;border:1px solid #fed7aa;padding:12px;border-radius:8px;font-size:13px;margin-bottom:16px}
+.backend-status{padding:10px 12px;margin:0 0 14px;border-radius:8px;font-size:13px;background:#e2e8f0;color:#334155}
+.backend-status[data-state="connected"]{background:#dcfce7;color:#166534}
+.backend-status[data-state="syncing"]{background:#dbeafe;color:#1d4ed8}
+.backend-status[data-state="error"]{background:#fee2e2;color:#991b1b}
+.backend-status[data-state="local"]{background:#fef3c7;color:#92400e}
 
 .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 
@@ -143,6 +148,7 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 <main>
 
 <div class="notice">TRAINING ENVIRONMENT — Fictional customers and service calls only. Not a live dispatch service.</div>
+<div id="backendStatus" class="backend-status" role="status" aria-live="polite" data-state="local">Local browser storage only — Supabase setup pending.</div>
 
 <section id="dashboard">
 
@@ -322,6 +328,9 @@ footer{text-align:center;color:#64748b;font-size:12px;padding:25px}
 
 <footer>Open Doors Dispatch Center · Training Simulator · Version 1.0</footer>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./supabase-config.js"></script>
+<script src="./dispatch-backend.js"></script>
 <script>
 
 const starterTeam=[
@@ -357,15 +366,58 @@ let editingId=null;
 let deletingId=null;
 let auditLog=JSON.parse(localStorage.getItem("od_audit")||"[]");
 
+function setBackendStatus(message,state){
+const element=document.getElementById("backendStatus");
+if(!element)return;
+element.textContent=message;
+element.dataset.state=state||"info";
+}
+window.odSetBackendStatus=setBackendStatus;
+
 function save(){
-
 localStorage.setItem("od_team",JSON.stringify(team));
-
 localStorage.setItem("od_tickets",JSON.stringify(tickets));
-
 localStorage.setItem("od_next",String(nextId));
 localStorage.setItem("od_audit",JSON.stringify(auditLog));
 
+if(window.dispatchBackend&&window.dispatchBackend.isConfigured()){
+setBackendStatus("Saving dispatch data to Supabase…","syncing");
+window.dispatchBackend.saveState({team,tickets,nextId,auditLog}).catch(error=>{
+console.error("Supabase save failed:",error);
+setBackendStatus("Cloud sync failed — local data is preserved. Check the Supabase setup.","error");
+});
+}else{
+setBackendStatus("Local browser storage only — Supabase public key is not configured.","local");
+}
+}
+
+async function initializeCloudState(){
+const backend=window.dispatchBackend;
+if(!backend||!backend.isConfigured()){
+setBackendStatus("Local browser storage only — add the Supabase public key to supabase-config.js.","local");
+return;
+}
+try{
+const remoteState=await backend.init();
+const hasSnapshot=remoteState&&Array.isArray(remoteState.team)&&Array.isArray(remoteState.tickets);
+if(hasSnapshot){
+team=remoteState.team.map((t,i)=>({...t,skill:t.skill||"HVAC Service",qualifications:t.qualifications||"Not specified",shiftStart:t.shiftStart||"08:00",shiftEnd:t.shiftEnd||"17:00",available:typeof t.available==="boolean"?t.available:true,id:t.id||i+1}));
+tickets=remoteState.tickets.map(t=>({...t,afterHoursFee:Number(t.afterHoursFee)||0}));
+nextId=Number(remoteState.nextId)||Math.max(1004,...tickets.map(t=>(Number(t.id)||0)+1));
+auditLog=Array.isArray(remoteState.auditLog)?remoteState.auditLog:[];
+localStorage.setItem("od_team",JSON.stringify(team));
+localStorage.setItem("od_tickets",JSON.stringify(tickets));
+localStorage.setItem("od_next",String(nextId));
+localStorage.setItem("od_audit",JSON.stringify(auditLog));
+render();
+}else{
+await backend.saveState({team,tickets,nextId,auditLog});
+}
+setBackendStatus("Supabase connected · dispatch data synced","connected");
+}catch(error){
+console.error("Supabase initialization failed:",error);
+setBackendStatus("Supabase unavailable — local data preserved. Check migration, key, and anonymous sign-in.","error");
+}
 }
 
 function showPage(page){
@@ -807,6 +859,7 @@ showPage("tickets");
 });
 
 render();
+initializeCloudState();
 
 </script>
 
