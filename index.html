@@ -363,6 +363,8 @@ let nextId=Number(localStorage.getItem("od_next")||1004);
 
 let selectedTechId=null;
 let editingId=null;
+let localMutationVersion=0;
+let cloudReady=false;
 let deletingId=null;
 let auditLog=JSON.parse(localStorage.getItem("od_audit")||"[]");
 
@@ -375,12 +377,17 @@ element.dataset.state=state||"info";
 window.odSetBackendStatus=setBackendStatus;
 
 function save(){
+localMutationVersion++;
 localStorage.setItem("od_team",JSON.stringify(team));
 localStorage.setItem("od_tickets",JSON.stringify(tickets));
 localStorage.setItem("od_next",String(nextId));
 localStorage.setItem("od_audit",JSON.stringify(auditLog));
 
 if(window.dispatchBackend&&window.dispatchBackend.isConfigured()){
+if(!cloudReady){
+setBackendStatus("Saved in this browser · waiting for cloud connection…","syncing");
+return;
+}
 setBackendStatus("Saving dispatch data to Supabase…","syncing");
 window.dispatchBackend.saveState({team,tickets,nextId,auditLog}).catch(error=>{
 console.error("Supabase save failed:",error);
@@ -394,13 +401,20 @@ setBackendStatus("Local browser storage only — Supabase public key is not conf
 async function initializeCloudState(){
 const backend=window.dispatchBackend;
 if(!backend||!backend.isConfigured()){
+cloudReady=true;
 setBackendStatus("Local browser storage only — add the Supabase public key to supabase-config.js.","local");
 return;
 }
+const versionAtStart=localMutationVersion;
 try{
 const remoteState=await backend.init();
 const hasSnapshot=remoteState&&Array.isArray(remoteState.team)&&Array.isArray(remoteState.tickets);
-if(hasSnapshot){
+const changedDuringConnect=localMutationVersion!==versionAtStart;
+
+if(changedDuringConnect){
+cloudReady=true;
+await backend.saveState({team,tickets,nextId,auditLog});
+}else if(hasSnapshot){
 team=remoteState.team.map((t,i)=>({...t,skill:t.skill||"HVAC Service",qualifications:t.qualifications||"Not specified",shiftStart:t.shiftStart||"08:00",shiftEnd:t.shiftEnd||"17:00",available:typeof t.available==="boolean"?t.available:true,id:t.id||i+1}));
 tickets=remoteState.tickets.map(t=>({...t,afterHoursFee:Number(t.afterHoursFee)||0}));
 nextId=Number(remoteState.nextId)||Math.max(1004,...tickets.map(t=>(Number(t.id)||0)+1));
@@ -409,12 +423,15 @@ localStorage.setItem("od_team",JSON.stringify(team));
 localStorage.setItem("od_tickets",JSON.stringify(tickets));
 localStorage.setItem("od_next",String(nextId));
 localStorage.setItem("od_audit",JSON.stringify(auditLog));
+cloudReady=true;
 render();
 }else{
+cloudReady=true;
 await backend.saveState({team,tickets,nextId,auditLog});
 }
 setBackendStatus("Supabase connected · dispatch data synced","connected");
 }catch(error){
+cloudReady=true;
 console.error("Supabase initialization failed:",error);
 setBackendStatus("Supabase unavailable — local data preserved. Check migration, key, and anonymous sign-in.","error");
 }
