@@ -92,7 +92,7 @@
 
     // Freeze each save's data so queued writes cannot read a later mutated object.
     const snapshot = JSON.parse(JSON.stringify(state));
-    writeQueue = writeQueue.then(async function () {
+    writeQueue = writeQueue.catch(function () { /* allow a later save to retry after a transient failure */ }).then(async function () {
       setStatus("Syncing dispatch data…", "syncing");
       const result = await client
         .from("dispatch_state")
